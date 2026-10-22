@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "MiniLedger",
+    "slug": "miniledger",
+    "scheme": "miniledger",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.miniledger.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to take a photo of a receipt to attach to a loan entry.",
+        "NSPhotoLibraryUsageDescription": "Used to pick a photo of a receipt to attach to a loan entry."
+      }
+    },
+    "android": {
+      "package": "com.miniledger.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MiniLedger uses your photos to attach a receipt to a loan entry.",
+          "cameraPermission": "MiniLedger uses your camera to photograph a receipt for a loan entry."
+        }
+      ],
+      "expo-image",
+      "expo-splash-screen"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

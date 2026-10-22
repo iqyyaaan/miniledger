@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: miniledger-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: miniledger
+      POSTGRES_PASSWORD: miniledger
+      POSTGRES_DB: miniledger
+    ports:
+      - "5432:5432"
+    volumes:
+      - miniledger-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # The API waits on this before running migrations.
+      test: ["CMD-SHELL", "pg_isready -U miniledger -d miniledger"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Separate database used by `npm run test:integration` so tests never
+  # truncate the data you are demoing.
+  db-test:
+    image: postgres:16-alpine
+    container_name: miniledger-db-test
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: miniledger
+      POSTGRES_PASSWORD: miniledger
+      POSTGRES_DB: miniledger_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U miniledger -d miniledger_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  miniledger-pgdata:

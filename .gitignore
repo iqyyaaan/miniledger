@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+
+# Uploaded receipts are user data, not source.
+server/uploads/*
+!server/uploads/.gitkeep
+server/tests/.tmp-uploads/
+
+# Expo
+app/.expo/
+app/ios/
+app/android/
+app/web-build/
+
+# Claude Code session/tooling state — not project source.
+.claude/
+app/.claude/

@@ -1,55 +1,49 @@
 # MiniLedger
 
-Track money lent to friends: who owes you, how much, and since when.
+A small app for tracking money you've lent to friends — who owes you, how much, and since when.
 
-A monorepo with two pieces:
+It's a monorepo: a Node/TypeScript/Postgres API in `server/`, and an Expo/React Native app in `app/`, with a `docker-compose.yml` at the root that spins up Postgres for both dev and tests.
 
 ```
 miniledger/
-├── server/   Node.js + TypeScript + PostgreSQL API
-├── app/      React Native app (Expo + expo-router)
-└── docker-compose.yml   Postgres for both dev and tests
+├── server/   the API
+├── app/      the mobile app
+└── docker-compose.yml
 ```
 
----
+## Before you start
 
-## 1. Prerequisites
+You'll need Docker Desktop (any recent version — it's only there to run Postgres, nothing else needs it) and two different Node versions depending on which half you're touching. The server is happy on Node 20. The app isn't — Expo SDK 58 and React Native 0.88 need Node 22+, so I've pinned `app/.nvmrc` to 24.16.0. If you use nvm, `cd app && nvm use` picks that up automatically; the server doesn't need anything special, whatever Node 20+ you already have is fine.
 
-| Tool | Version | Why |
-|---|---|---|
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | any recent | runs Postgres — no local Postgres install needed |
-| Node.js | **20.x** for `server/`, **24.x** for `app/` | the app's Expo SDK (58) / React Native (0.88) require Node ≥22; the server is fine on 20. If you use [nvm](https://github.com/nvm-sh/nvm), each folder has its own `.nvmrc`-equivalent — just run `nvm use 24` inside `app/` |
-| Xcode (Mac) or Android Studio | latest | to run an iOS Simulator / Android Emulator. A physical phone with the **Expo Go** app also works — see §4. |
+You'll also want Xcode (for the iOS Simulator) or Android Studio, unless you're testing on a real phone through Expo Go, which works just as well and is covered further down.
 
-No native Postgres, no global Expo CLI, no Android/iOS SDKs beyond what Xcode/Android Studio already bundle.
+Nothing else to install globally — no system-wide Postgres, no Expo CLI, nothing beyond what Xcode/Android Studio already bring.
 
----
-
-## 2. Run the backend
+## Getting the backend running
 
 ```bash
 cd server
-cp .env.example .env          # defaults already match docker-compose.yml
-docker compose -f ../docker-compose.yml up -d   # starts Postgres on :5432 (+ a test DB on :5433)
+cp .env.example .env
+docker compose -f ../docker-compose.yml up -d   # Postgres on :5432, plus a throwaway test DB on :5433
 npm install
-npm run migrate               # creates the schema
-npm run seed                  # creates a demo account with realistic sample data
-npm run dev                   # API on http://localhost:4000
+npm run migrate
+npm run seed      # creates a demo account with realistic sample data
+npm run dev       # API on http://localhost:4000
 ```
 
-Leave this running. You should see:
+Leave that running — you should see it print something like:
 
 ```
 MiniLedger API listening on http://localhost:4000  (env=development, tz=Asia/Kolkata, docs=/api/docs)
 ```
 
-**Interactive API docs**: open **http://localhost:4000/api/docs** — every endpoint, with a "try it" panel. Useful for exercising the API without the app at all.
+If you want to poke at the API directly without the app, there's a full interactive docs page at **http://localhost:4000/api/docs** — every endpoint, with a "try it" panel right there in the browser.
 
-**The demo account** created by `npm run seed`: phone **`9876543210`**, with 10 loans across overdue / due-soon / repaid states, so the summary card and filters have something real to show immediately.
+The seed script sets up a demo account on phone **`9876543210`** with ten loans spread across overdue, due-soon, and already-repaid states, so the summary card and filters actually have something worth looking at the moment you log in, rather than a wall of zeros.
 
-### How the mock OTP works
+### About the OTP
 
-`POST /api/auth/request-otp` prints the 6-digit code to this terminal, exactly as the assignment asks:
+This was explicitly meant to be mocked, so that's what it is — `POST /api/auth/request-otp` just prints the 6-digit code straight to this terminal:
 
 ```
 ┌──────────────────────────────────────────┐
@@ -60,103 +54,96 @@ MiniLedger API listening on http://localhost:4000  (env=development, tz=Asia/Kol
 └──────────────────────────────────────────┘
 ```
 
-In development the same code is *also* returned in the API response as `devCode` (controlled by `OTP_ECHO_IN_RESPONSE` in `.env`, and refused at boot if left on in `NODE_ENV=production`) — the app shows it as a tappable "Dev mode" banner so you never have to alt-tab to this terminal during a demo.
+In development the same code also comes back in the API response as `devCode` (the app shows it as a tappable banner so you're not alt-tabbing to a terminal mid-demo). That behavior is gated behind `OTP_ECHO_IN_RESPONSE` in `.env`, and the server will flatly refuse to boot if that's left on with `NODE_ENV=production` — handing out login codes in a production API response would be a fairly bad idea.
 
-### Backend tests
+### Running the tests
 
 ```bash
-npm test                 # 41 unit tests — money parsing, phone normalization, OTP crypto, image-type sniffing
-npm run test:integration # 54 integration tests — real HTTP requests against a real throwaway Postgres
+npm test                 # 41 unit tests — money parsing, phone normalization, OTP crypto, image sniffing
+npm run test:integration # 54 integration tests, hitting real HTTP routes against a real Postgres
 npm run test:all         # both
 ```
 
-The integration suite runs against the second Postgres service in `docker-compose.yml` (`db-test`, port 5433, tmpfs-backed) so it never touches your dev data.
+The integration suite runs against the second Postgres instance from docker-compose (`db-test`, tmpfs-backed, port 5433), so running tests never touches the data you're actually demoing with.
 
----
+## Getting the app running
 
-## 3. Run the app
-
-In a **second terminal**:
+In a second terminal:
 
 ```bash
 cd app
-nvm use                  # picks up .nvmrc → Node 24
+nvm use              # Node 24, via .nvmrc
 npm install
-npx expo start --ios     # or: --android, or no flag and press i / a / w, or scan the QR with Expo Go
+npx expo start --ios # or --android, or no flag and press i / a / w, or scan the QR with Expo Go
 ```
 
-The app auto-detects the API's address:
-- **iOS Simulator** → `localhost:4000` (shares the Mac's network)
-- **Android Emulator** → `10.0.2.2:4000` (the emulator's alias for the host)
-- **Physical device via Expo Go** → the Mac's LAN IP, read automatically from the Expo dev server's own address — just make sure your phone is on the same Wi-Fi as your Mac
+The app figures out where the API lives on its own: `localhost:4000` on the iOS Simulator (it shares the Mac's network), `10.0.2.2:4000` on the Android Emulator (its alias for the host machine), or your Mac's LAN IP for a physical device over Expo Go — picked up automatically from the Expo dev server, as long as your phone's on the same Wi-Fi. If you ever want to point it at a deployed API instead, drop `EXPO_PUBLIC_API_URL` into an `app/.env` file and that takes priority over all of the above.
 
-To point at a different/deployed API, set `EXPO_PUBLIC_API_URL` in an `app/.env` file.
+### What to actually try
 
-### Try it
+- **Log in** with `9876543210`, tap Send code, then tap the yellow "Dev mode" banner to autofill the OTP (or just read it off the server log)
+- Look at the **summary card** — outstanding total, lent/repaid/overdue breakdown, a due-soon banner when something's coming up
+- Flip through the **filter chips** and try the **search**
+- **Add an entry** with the `+` button — friend name with autocomplete from people you've already lent to, an amount, a due date, an optional note, and optionally a receipt photo from the camera or your library
+- **Mark something repaid** — tap the pill on a row, or open the entry and use the button there. Overdue entries are the ones with the red border down the left side
+- Open an entry's **detail view** to edit it, swap out the receipt, delete it, or undo a repayment
+- Toggle your **system dark mode** — the whole app follows it automatically, no setting to flip inside the app itself
 
-1. **Login** — phone `9876543210` → *Send code*. Tap the yellow "Dev mode" banner to autofill the OTP (or type it from the server log).
-2. **Ledger** — summary card at the top (outstanding, lent, repaid, overdue, due-soon banner), filter chips, search.
-3. **Add an entry** — the `+` button: friend name (with autocomplete from past entries), amount, due date, optional note, optional receipt photo (camera or library).
-4. **Mark repaid** — tap the pill on a row, or open an entry and use the button there. Overdue entries are the ones with the red left border.
-5. **Entry detail** — edit any field, attach/replace/remove a receipt, delete the entry, undo a repayment.
-6. **Dark mode** — follows the OS appearance setting automatically.
+## Running it on your actual phone
 
----
+Install **Expo Go** from the App Store or Play Store, make sure your phone's on the same Wi-Fi as your Mac, then run `npx expo start` (no platform flag) and scan the QR code it prints. That's it.
 
-## 4. Running on a physical phone
+## How it's built, and why
 
-1. Install **Expo Go** from the App Store / Play Store.
-2. Make sure your phone and Mac are on the same Wi-Fi network.
-3. `npx expo start` (no `--ios`/`--android` flag) and scan the QR code shown in the terminal.
+### The backend
 
----
+There's no ORM — every query is plain SQL through `pg`, which I'd rather own directly than hide behind an abstraction, especially somewhere I need to be able to explain every line of. The split is: SQL lives in `*.repository.ts` files, business logic lives in `*.service.ts`, and HTTP-level stuff (status codes, validation) lives in `*.routes.ts`.
 
-## Architecture notes
+Money is never a float, anywhere. Every amount is an integer — paise, not rupees — stored in a `BIGINT` column, and `lib/money.ts` is the one place that converts between that and the decimal string a user actually types. It works off the digit string rather than doing `parseFloat(x) * 100`, because that trick quietly breaks on inputs like `1.005` (IEEE-754 stores it as 1.00499999999999989, and the rounding goes the wrong way). The exact same logic is mirrored client-side in `app/src/lib/money.ts`, so a number is never "correct" on one side and slightly off on the other.
 
-### Backend (`server/`)
+"Overdue" isn't a column anywhere — it's derived on every read, from `status = 'outstanding' AND due_date < asOf`. Storing it instead would mean running something on a schedule just to flip a flag at midnight, which felt like solving a problem that didn't need to exist.
 
-- **Plain SQL over `pg`**, no ORM — every query is one you can read end-to-end, which matters for an interview where you need to explain all of it. Queries live in `*.repository.ts` files; business rules live in `*.service.ts`; HTTP concerns (validation, status codes) live in `*.routes.ts`.
-- **Money is never a float.** Every amount is stored as an integer in minor units (paise) in a `BIGINT` column. `lib/money.ts` is the one place that converts between a user-typed decimal string and that integer, using digit-string arithmetic rather than `parseFloat(x) * 100` — the latter is wrong for inputs like `1.005`. The same logic is mirrored on the client (`app/src/lib/money.ts`) so a number never has two different "correct" values depending on which side computed it.
-- **"Overdue" is derived, never stored**: `is_overdue = status = 'outstanding' AND due_date < asOf`, computed in SQL on every read. Storing it would need a cron job to keep it from silently going stale at midnight.
-- **The summary endpoint is one query** — a single aggregate with `FILTER (WHERE ...)` clauses computing total lent/repaid/outstanding/overdue/due-soon in one pass, rather than fetching every loan and reducing in JavaScript (which would get slower as the ledger grows and ship the whole table over the wire for five numbers).
-- **OTPs and refresh tokens are stored as SHA-256 hashes**, never plaintext. OTP verification runs inside a DB transaction with the row locked `FOR UPDATE`, so concurrent guesses are serialized and a wrong guess always costs an attempt (5 max, then locked out).
-- **Refresh tokens rotate** on every use (single-use, OAuth 2.0 BCP-style). Replaying an already-rotated token is treated as token theft and revokes every session for that user.
-- **Receipt uploads are verified by magic number**, not by the filename or the client's declared `Content-Type` — an attacker-supplied HTML/SVG file renamed to `.png` is rejected before it ever touches disk, which is what stops a stored-XSS-via-upload.
-- **Idempotent repayment**: `POST /loans/:id/repayment` is a single conditional `UPDATE ... WHERE status = 'outstanding'`. Two concurrent taps race at the database, not in application code — exactly one succeeds, the other gets a clean `409 already_repaid`.
-- **Pagination is keyset-based** (`(due_date, id) > (cursor...)`), not `OFFSET`, so it doesn't get slower on later pages and doesn't skip/duplicate rows if the list changes mid-scroll.
+The summary endpoint is a single query. The lazy version would pull every loan and reduce it in JavaScript, which means transferring the whole table just to compute five numbers, and getting slower as the ledger grows. Using `FILTER (WHERE ...)` inside one aggregate query lets Postgres do that work in one pass instead.
 
-### App (`app/`)
+OTPs and refresh tokens are stored as SHA-256 hashes, never plaintext — a DB dump gets you hashes, not working credentials. OTP verification happens inside a transaction with the row locked `FOR UPDATE`, so two concurrent guesses can't both read "4 attempts left" and both proceed; each one really does cost an attempt, capped at 5 before lockout. Refresh tokens rotate on every use and are single-use by design — if a token that's already been rotated ever shows up again, that's not a normal race condition, it's a strong signal of a stolen or duplicated token, so the whole session family gets revoked.
 
-- **Expo Router**, file-based routes under `src/app/`, with the current `Stack.Protected` pattern gating `(app)/*` behind a signed-in session and `(auth)/*` behind a signed-out one.
-- **TanStack Query** for all server state, with optimistic updates on "mark repaid"/"undo" — the row updates instantly in every open filter tab, then reconciles with the server's response, and rolls back cleanly if the request fails.
-- **Tokens live in the OS keychain** (`expo-secure-store`), not `AsyncStorage` — a refresh token is a long-lived bearer credential and `AsyncStorage` is unencrypted on Android.
-- **A single fetch client** (`lib/api-client.ts`) handles the access-token-expired-mid-request case: a 401 triggers one shared in-flight refresh (deduplicated across simultaneous requests, so three screens failing at once doesn't try to burn the single-use refresh token three times), then retries the original request once.
+Receipt uploads get checked by their actual magic bytes, not by the filename or whatever `Content-Type` the client claims. An HTML or SVG file renamed to `.png` gets rejected before it ever touches disk — that's specifically what stops someone using the upload as a stored-XSS vector against our own origin.
 
----
+Marking something repaid is a single conditional `UPDATE ... WHERE status = 'outstanding'`. Two taps racing each other hit that at the database level, not in application code, so exactly one wins and the other gets a clean `409`. No read-then-write anywhere, so there's no window for a lost update.
 
-## What's implemented from the brief
+Pagination uses a keyset cursor rather than `OFFSET` — comparing against the last row you saw instead of asking Postgres to count and skip. `OFFSET` gets slower on later pages and can skip or duplicate rows if the list changes while someone's scrolling; this doesn't have either problem.
+
+### The app
+
+Routing is Expo Router, file-based, under `src/app/`, using the current `Stack.Protected` pattern to gate the signed-in routes behind a real session and the auth routes behind a signed-out one.
+
+Server state goes through TanStack Query, with optimistic updates on marking something repaid (or undoing it) — the row flips instantly in every open filter tab, then reconciles once the actual response comes back, and rolls back cleanly if the request fails.
+
+Tokens live in the OS keychain via `expo-secure-store`, not `AsyncStorage` — a refresh token is a long-lived bearer credential for the account, and `AsyncStorage` is unencrypted on Android. Worth the extra dependency.
+
+There's one fetch client (`lib/api-client.ts`) that all requests go through, and it handles the case where your access token expires mid-session: a 401 triggers a single shared token refresh, deduplicated across whatever else happens to be in flight at that moment. Without that dedup, three screens 401-ing at once would each try to refresh independently, and since a refresh token is single-use, only the first would actually succeed — the other two would look like token reuse and get the whole session revoked.
+
+## Against the brief
 
 **Backend**
-- [x] Phone number login with a mock OTP, printed to the server log
-- [x] Add a loan entry (friend name, amount, due date)
+- [x] Phone login with a mock OTP, printed to the server log
+- [x] Add a loan entry — friend name, amount, due date
 - [x] Mark an entry as repaid
-- [x] Summary endpoint: total lent, total repaid, overdue amount (plus due-soon and per-friend breakdown)
+- [x] Summary endpoint: total lent, total repaid, overdue amount (plus due-soon and a per-friend breakdown, which weren't asked for but fell out naturally)
 
 **App**
-- [x] Login screen: phone + OTP
+- [x] Login screen, phone + OTP
 - [x] List of entries, overdue ones highlighted
 - [x] Form to add an entry
 - [x] Summary card at the top
 
 **Bonus**
-- [x] Upload a photo of a receipt with an entry (camera or library)
-- [x] Input validation (Zod, both client and server) and tests — 95 automated backend tests (41 unit, 54 integration against a real database)
+- [x] Receipt photo upload, camera or library
+- [x] Input validation (Zod, both sides) and tests — 95 of them, 41 unit and 54 integration against a real throwaway Postgres, which felt like more than "basic" but didn't seem like a reason to stop
 
----
+## If something's not working
 
-## Troubleshooting
-
-- **App can't reach the API**: confirm `npm run dev` (server) is still running and `curl http://localhost:4000/api/health` returns `{"status":"ok", ...}`.
-- **Postgres won't start**: Docker Desktop needs to actually be running first (`open -a Docker` on a Mac, then wait for it to say "running").
-- **Metro bundler shows "Unmatched Route" or a blank screen on first launch**: fully quit and restart `npx expo start -c` (clears the Metro cache) — most commonly needed after switching Node versions.
-- **iOS Simulator first launch is slow**: the first `expo start --ios` downloads the Expo Go client to the simulator; subsequent launches are fast.
+- **App can't reach the API** — check `npm run dev` is actually still running in the server terminal, and that `curl http://localhost:4000/api/health` comes back `{"status":"ok", ...}`
+- **Postgres won't come up** — Docker Desktop has to be open first; `open -a Docker` and wait for it to say it's running before `docker compose up -d`
+- **"Unmatched Route" or a blank screen on first launch** — quit everything and run `npx expo start -c` to clear Metro's cache. Shows up most often right after switching Node versions
+- **First Simulator launch feels slow** — that's `expo start --ios` downloading the Expo Go client to the simulator the first time; every launch after that is fast

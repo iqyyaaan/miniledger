@@ -2,7 +2,8 @@ import type { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { query, type SqlParam } from '../../db/pool.js';
 import { encodeCursor } from '../../lib/cursor.js';
 
-/** Either a `PoolClient` (inside a transaction) or the module-level `query` helper. */
+// either a PoolClient (when we're inside a transaction) or the plain query()
+// helper — same .query() shape either way
 interface Executor {
   query<T extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]): Promise<QueryResult<T>>;
 }
@@ -12,7 +13,7 @@ export interface LoanRow {
   friend_name: string;
   amount_minor: number;
   currency: string;
-  due_date: string; // YYYY-MM-DD — see the DATE type parser in db/pool.ts.
+  due_date: string; // "YYYY-MM-DD" — DATE type parser lives in db/pool.ts
   note: string | null;
   status: 'outstanding' | 'repaid';
   repaid_at: Date | null;
@@ -34,22 +35,17 @@ export interface ListLoansParams {
   friend?: string;
   asOf: string | null;
   timezone: string;
-  /** Soonest-due first by default — the order a lender actually chases people in. */
-  order: 'asc' | 'desc';
+  order: 'asc' | 'desc'; // soonest-due first by default, i.e. the order you'd actually chase people in
   limit: number;
   cursor?: { dueDate: string; id: string };
   dueSoonDays: number;
 }
 
-/**
- * Every projection of a loan goes through this fragment, so `isOverdue` and
- * `daysUntilDue` are computed by exactly one piece of SQL. The alternative —
- * computing them in JS — would use the *server process* timezone and quietly
- * disagree with the summary endpoint.
- *
- * `$1` is the user id and `$2`/`$3` are the as-of date and timezone in every
- * query below, so the fragment can assume those positions.
- */
+// every query below reuses this fragment so is_overdue / days_until_due are
+// computed in exactly one place. tried doing this in JS at first and it
+// used the server process's timezone, which quietly disagreed with whatever
+// the summary endpoint computed — moved it into SQL and that went away.
+// assumes $1 = user id, $2/$3 = as-of date + timezone, same slots everywhere.
 const LOAN_SELECT = `
   SELECT
     l.id,
@@ -112,19 +108,17 @@ export async function listLoans(
   }
 
   if (params.search) {
-    // Matches a friend's name or the note. Parameterised, so the `%` wrapping
-    // happens in the value and never in the SQL string.
+    // matches friend name or note. the % wrapping happens on the bound
+    // value, not in the SQL text, so this stays parameterized
     const needle = push(`%${escapeLike(params.search)}%`);
     where.push(`(l.friend_name ILIKE ${needle} ESCAPE '\\' OR l.note ILIKE ${needle} ESCAPE '\\')`);
   }
 
-  /**
-   * Keyset ("seek") pagination rather than OFFSET. OFFSET makes the database
-   * walk and discard every skipped row, so page 50 is slower than page 1, and
-   * a row inserted mid-scroll shifts everything down by one and makes the app
-   * show a duplicate. Comparing the sort tuple against the last row seen has
-   * neither problem and uses the (user_id, due_date) index directly.
-   */
+  // keyset pagination, not OFFSET. OFFSET makes Postgres walk and throw away
+  // every skipped row (page 50 is slower than page 1), and if a row gets
+  // inserted mid-scroll everything shifts and the app shows a dupe.
+  // comparing against the last-seen sort tuple avoids both and hits the
+  // (user_id, due_date) index directly.
   const comparison = params.order === 'asc' ? '>' : '<';
   if (params.cursor) {
     const dueDateParam = push(params.cursor.dueDate);
@@ -133,7 +127,7 @@ export async function listLoans(
   }
 
   const direction = params.order === 'asc' ? 'ASC' : 'DESC';
-  const limitParam = push(params.limit + 1); // Fetch one extra to detect "has more".
+  const limitParam = push(params.limit + 1); // grab one extra row just to know if there's a next page
 
   const sql = `
     ${LOAN_SELECT}
@@ -154,16 +148,12 @@ export async function listLoans(
   };
 }
 
-/**
- * `client` is optional and, when passed, the read runs on that same checked-
- * out connection instead of grabbing a fresh one from the pool.
- *
- * That matters inside a transaction: Postgres's MVCC means an uncommitted
- * UPDATE is invisible to any *other* connection, pool-borrowed ones included.
- * `markRepaid`/`markOutstanding` mutate and then re-read within one
- * transaction — without passing `client` through, the re-read would silently
- * see the pre-mutation row.
- */
+// client is optional — pass it when you're inside a transaction so the read
+// hits the same connection instead of a fresh one from the pool. matters
+// because Postgres won't show an uncommitted UPDATE to any other
+// connection. markRepaid/markOutstanding write then re-read in one
+// transaction, and without threading client through here the re-read
+// silently came back with the pre-update row — found that the hard way.
 export async function findLoanById(
   userId: string,
   loanId: string,
@@ -198,8 +188,8 @@ export async function insertLoan(
     [userId, input.friendName, input.amountMinor, input.currency, input.dueDate, input.note],
   );
 
-  // Re-read through LOAN_SELECT so a created loan is byte-identical in shape
-  // to a listed one, including the derived overdue fields.
+  // re-read through LOAN_SELECT so what we return matches a listed row
+  // exactly, derived fields and all, instead of hand-building a shape here
   return (await findLoanById(userId, rows[0]!.id, asOf, timezone))!;
 }
 
@@ -239,15 +229,12 @@ export async function updateLoan(
   return findLoanById(userId, loanId, asOf, timezone);
 }
 
-/**
- * Flip a loan to repaid.
- *
- * The `AND status = 'outstanding'` in the WHERE clause is the whole
- * concurrency story: two taps on "Mark repaid" race, both run this UPDATE,
- * and Postgres guarantees exactly one matches a row. The loser gets
- * `rowCount = 0` and the service turns that into a 409 rather than silently
- * overwriting `repaid_at`. No SELECT-then-UPDATE, so no lost update.
- */
+// the "AND status = 'outstanding'" is doing all the concurrency work here.
+// two taps on "mark repaid" race each other, both fire this UPDATE, and
+// Postgres guarantees only one actually matches a row — the other gets
+// rowCount 0 and the service turns that into a 409 instead of quietly
+// stomping on repaid_at a second time. no SELECT-then-UPDATE anywhere, so
+// there's no lost-update window to begin with.
 export async function markRepaid(
   client: PoolClient,
   userId: string,
@@ -263,7 +250,7 @@ export async function markRepaid(
   return { updated: (rowCount ?? 0) > 0 };
 }
 
-/** The symmetric undo, so a mis-tap is recoverable. */
+// the undo button, basically — for when you mis-tap "mark repaid"
 export async function markOutstanding(
   client: PoolClient,
   userId: string,
@@ -294,7 +281,8 @@ export async function deleteLoan(userId: string, loanId: string): Promise<boolea
   return (rowCount ?? 0) > 0;
 }
 
-/** Distinct friends this user has lent to, newest activity first — autocomplete. */
+// distinct friends this user has lent to, newest activity first — feeds the
+// autocomplete on the add-entry form
 export async function listFriendNames(userId: string, limit: number): Promise<
   Array<{ name: string; loanCount: number; outstandingMinor: number }>
 > {
@@ -322,7 +310,8 @@ export async function listFriendNames(userId: string, limit: number): Promise<
   }));
 }
 
-/** `%` and `_` are wildcards in LIKE; a user searching for "50%" means literally that. */
+// % and _ are LIKE wildcards — someone searching for a literal "50%" in a
+// note shouldn't match everything
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }

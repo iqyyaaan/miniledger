@@ -5,12 +5,10 @@ import { runMigrations } from './db/migrate.js';
 import { logger } from './lib/logger.js';
 import { ensureUploadRoot } from './modules/receipts/receipts.service.js';
 
-/**
- * Boot order is deliberate: prove the database is reachable, bring the schema
- * up to date, make sure the upload directory exists — and only then start
- * accepting traffic. Listening first would mean serving 500s during the
- * window before migrations finish.
- */
+// boot order matters here: check the DB is actually reachable, bring the
+// schema up to date, make sure the upload dir exists, THEN start accepting
+// traffic. listening first would mean serving 500s during the window
+// before migrations have finished.
 async function main(): Promise<void> {
   await pool.query('SELECT 1');
   logger.info('Connected to Postgres');
@@ -28,17 +26,15 @@ async function main(): Promise<void> {
     );
   });
 
-  // Node will not exit with a socket held open by a keep-alive connection;
-  // these caps make sure idle clients are reaped.
+  // Node won't exit while a keep-alive socket is still sitting open —
+  // these caps make sure idle clients eventually get reaped
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 70_000;
 
-  /**
-   * Graceful shutdown: stop taking new connections, let in-flight requests
-   * finish, then close the pool. Without this, a deploy can kill a request
-   * mid-transaction. The 10s timer is the backstop for a connection that
-   * refuses to drain.
-   */
+  // graceful shutdown: stop taking new connections, let in-flight requests
+  // finish, then close the pool. without this a deploy could kill a
+  // request mid-transaction. the 10s timer is just the backstop in case
+  // something refuses to drain.
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return;
@@ -62,8 +58,9 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
 
-  // A rejection nobody handled means state is unknown — log loudly and let
-  // the supervisor restart us rather than limping on.
+  // an unhandled rejection means we genuinely don't know what state we're
+  // in anymore — log it loudly and let the process restart instead of
+  // trying to limp along
   process.on('unhandledRejection', (reason) => {
     logger.fatal({ err: reason }, 'Unhandled promise rejection');
     void shutdown('unhandledRejection');

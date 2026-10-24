@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { pickReceiptImage, type PickedImage } from '@/lib/pick-image';
 import { useTheme } from '@/theme/colors';
 
-/** Used on the "Add entry" form, where there's no loan id yet to upload against. */
+// used on the add-entry form, where there's no loan id yet to upload against
 export function ReceiptAttachField({
   value,
   onChange,

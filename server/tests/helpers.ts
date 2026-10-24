@@ -6,16 +6,13 @@ import { runMigrations } from '../src/db/migrate.js';
 import { resetRateLimits } from '../src/middleware/rate-limit.js';
 import { ensureUploadRoot } from '../src/modules/receipts/receipts.service.js';
 
-/**
- * Integration tests run against a *real* Postgres (the `db-test` service in
- * docker-compose.yml), not a mock or an in-memory shim.
- *
- * That is deliberate. Most of the interesting logic in this app IS the SQL —
- * aggregate FILTER clauses, the generated `friend_key` column, the CHECK
- * constraint that keeps `status` and `repaid_at` in step, the conditional
- * UPDATE that makes repayment idempotent. A fake database would happily pass
- * tests for behaviour Postgres does not actually have.
- */
+// integration tests hit a REAL Postgres (the db-test service in
+// docker-compose.yml), not a mock or some in-memory shim, on purpose. most
+// of the interesting logic in this app basically IS the SQL — the aggregate
+// FILTER clauses, the generated friend_key column, the CHECK constraint
+// that keeps status/repaid_at in sync, the conditional UPDATE that makes
+// repayment idempotent. a fake database would happily pass tests for
+// behavior Postgres doesn't actually have.
 
 let app: Express | null = null;
 
@@ -28,7 +25,7 @@ export async function getApp(): Promise<Express> {
   return app;
 }
 
-/** Wipe between tests. `users` cascades to loans, receipts and refresh tokens. */
+// wipes between tests — users cascades down to loans, receipts, refresh tokens
 export async function resetDatabase(): Promise<void> {
   await pool.query('TRUNCATE users, otp_codes RESTART IDENTITY CASCADE');
   resetRateLimits();
@@ -46,11 +43,10 @@ export interface TestSession {
   auth: (req: request.Test) => request.Test;
 }
 
-/**
- * Walk the real login flow — request a code, read it back out of the response
- * (`OTP_ECHO_IN_RESPONSE` is on in tests), verify it. No seeding a user row
- * directly, so the tests exercise the same path a real device takes.
- */
+// walks the real login flow — request a code, grab it back out of the
+// response (OTP_ECHO_IN_RESPONSE is on for tests), verify it. no shortcut
+// of seeding a user row straight into the DB, so this exercises the exact
+// path a real device would take.
 export async function signIn(
   server: Express,
   phone = '+919876543210',
@@ -75,15 +71,16 @@ export async function signIn(
   };
 }
 
-/** `+5` -> five days from today, as YYYY-MM-DD. Keeps fixtures time-relative. */
+// +5 -> five days from today, as YYYY-MM-DD. keeps test fixtures relative
+// to "now" instead of hardcoded dates that go stale.
 export function daysFromToday(offset: number): string {
   const date = new Date();
-  date.setUTCHours(12, 0, 0, 0); // Midday, so a DST shift cannot move the day.
+  date.setUTCHours(12, 0, 0, 0); // midday so a DST shift can't accidentally move the day
   date.setUTCDate(date.getUTCDate() + offset);
   return date.toISOString().slice(0, 10);
 }
 
-/** A minimal but genuinely valid 1x1 PNG, for receipt-upload tests. */
+// a real, valid 1x1 PNG (not just some random bytes) for receipt-upload tests
 export const TINY_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
   'base64',

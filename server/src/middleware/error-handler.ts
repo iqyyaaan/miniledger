@@ -17,10 +17,9 @@ export interface ErrorBody {
   };
 }
 
-/**
- * `pino-http` types `req.id` as `ReqId` (string | number | object). Every
- * place we surface it, we want a plain string, so it is normalised once here.
- */
+// pino-http types req.id as ReqId (string | number | object) — everywhere
+// we actually want it, we want a plain string, so normalize it once here
+// instead of casting at every call site
 export function requestId(req: Request): string {
   return String((req as Request & { id?: unknown }).id ?? '');
 }
@@ -35,15 +34,12 @@ export function notFoundHandler(req: Request, res: Response): void {
   } satisfies ErrorBody);
 }
 
-/**
- * The single exit point for every failure in the API.
- *
- * Expected failures (AppError, Zod, multer, our own parse errors) are
- * translated into a stable `{ error: { code, message, details } }` shape that
- * the app can branch on. Anything else is an unanticipated bug: it is logged
- * in full, and the client gets a bare 500 with a request id to quote — no
- * stack traces, no Postgres error text, no table names.
- */
+// the one place every failure in the API funnels through. the expected
+// stuff — AppError, Zod, multer, our own parse errors — gets translated
+// into a stable { error: { code, message, details } } shape the app can
+// branch on. anything else is a bug we didn't anticipate: gets logged in
+// full server-side, client just gets a bare 500 with a request id to quote.
+// no stack traces, no raw Postgres errors, no table names, ever.
 export function errorHandler(
   error: unknown,
   req: Request,
@@ -109,7 +105,7 @@ export function errorHandler(
     return;
   }
 
-  // Malformed JSON body — express.json() throws a SyntaxError with .body set.
+  // malformed JSON body — express.json() throws a SyntaxError with .body set on it
   if (error instanceof SyntaxError && 'body' in error) {
     res.status(400).json({
       error: { code: 'malformed_json', message: 'Request body is not valid JSON.', requestId: reqId },
@@ -123,18 +119,17 @@ export function errorHandler(
     error: {
       code: 'internal_error',
       message: 'Something went wrong on our end.',
-      // Only in development do we hand back the real message, and never a stack.
+      // real message only in dev, never a stack trace either way
       details: isProduction ? undefined : { message: (error as Error)?.message },
       requestId: reqId,
     },
   } satisfies ErrorBody);
 }
 
-/**
- * Express 4 does not catch rejections from async handlers — an unhandled
- * promise rejection would hang the request until it times out. Wrapping every
- * async route in this forwards the rejection to `errorHandler`.
- */
+// Express 4 doesn't catch rejections thrown from async handlers on its own
+// — without this an unhandled rejection just hangs the request until it
+// times out. wrapping every async route handler in this forwards the
+// rejection into errorHandler like you'd expect.
 export function asyncHandler<T extends (req: Request, res: Response, next: NextFunction) => Promise<unknown>>(
   fn: T,
 ) {

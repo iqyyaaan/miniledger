@@ -43,9 +43,8 @@ export default function AddLoanScreen() {
       });
 
       if (receipt) {
-        // The loan is created either way — a receipt upload failure here
-        // shouldn't undo it, just surface a note so the user knows to retry
-        // from the detail screen.
+        // the loan's created either way — a failed receipt upload shouldn't
+        // undo that, just surface a note so they know to retry from the detail screen
         await loansApi.uploadReceipt(loan.id, receipt).catch(() => {
           setFormError('Entry saved, but the receipt photo failed to upload. Add it from the entry screen.');
         });

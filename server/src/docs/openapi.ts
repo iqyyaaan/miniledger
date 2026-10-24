@@ -1,14 +1,11 @@
 import { env } from '../config/env.js';
 
-/**
- * A hand-written OpenAPI 3.1 document.
- *
- * Generating this from the Zod schemas would avoid the duplication, but it
- * also couples the public contract to internal validation — a refactor of a
- * schema would silently reshape the documented API. Writing it by hand keeps
- * the contract an explicit, reviewable artefact, and it is small enough that
- * drift is caught by the integration tests exercising the same routes.
- */
+// hand-written OpenAPI doc rather than generated from the Zod schemas.
+// generating it would avoid the duplication, sure, but it'd also couple the
+// public API contract to internal validation code — a schema refactor could
+// silently reshape what's documented without anyone noticing. writing it by
+// hand keeps the contract explicit and reviewable, and it's small enough
+// that drift gets caught by the integration tests hitting the same routes anyway.
 export function buildOpenApiDocument(baseUrl: string) {
   return {
     openapi: '3.1.0',

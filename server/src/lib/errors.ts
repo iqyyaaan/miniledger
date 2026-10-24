@@ -1,8 +1,6 @@
-/**
- * Every failure the API returns on purpose is an `AppError`. Anything else
- * that reaches the error handler is a bug and becomes a generic 500, so we
- * never leak a stack trace or a Postgres message to a client.
- */
+// every failure the API returns on purpose is an AppError. anything else
+// that bubbles up to the error handler is treated as a bug and turns into
+// a plain 500 — no stack trace or raw Postgres error ever reaches a client.
 export class AppError extends Error {
   readonly status: number;
   readonly code: string;

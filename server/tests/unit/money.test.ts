@@ -28,19 +28,18 @@ describe('parseAmountToMinor', () => {
     expect(parseAmountToMinor('$42.00', 'USD')).toBe(4200);
   });
 
-  /**
-   * The reason this module exists. `Math.round(1.005 * 100)` is 100 in IEEE-754
-   * because 1.005 is really 1.00499999999999989, so the float path loses a
-   * paisa. Working on the digit string cannot.
-   */
+  // this is basically the whole reason this module exists.
+  // Math.round(1.005 * 100) comes out to 100 in IEEE-754, because 1.005 is
+  // actually stored as 1.00499999999999989 — the float path loses a paisa
+  // right there. working on the digit string sidesteps that entirely.
   it('does not lose a paisa to floating point', () => {
     expect(parseAmountToMinor('1.005', 'KWD')).toBe(1005);
-    expect(Math.round(1.005 * 100)).toBe(100); // What the naive version does.
+    expect(Math.round(1.005 * 100)).toBe(100); // ...and this is what the naive version does
     expect(parseAmountToMinor('0.07')).toBe(7);
     expect(parseAmountToMinor('8.87')).toBe(887);
 
-    // 1000 entries of ₹0.07. Summing the floats drifts off 70 exactly;
-    // summing the integers cannot.
+    // 1000 entries of ₹0.07 — summing the floats drifts off 70 exactly,
+    // summing the integers can't
     let minorTotal = 0;
     let floatTotal = 0;
     for (let i = 0; i < 1000; i += 1) {
@@ -65,7 +64,7 @@ describe('parseAmountToMinor', () => {
     ['   ', 'whitespace only'],
     ['12.345', 'too many decimals for INR'],
     ['1.5', 'decimals on a zero-decimal currency'],
-  ] as const)('rejects %s (%s)', (input) => {
+  ] as const)('rejects %s (%s)', (input, _description) => {
     expect(() => parseAmountToMinor(input, input === '1.5' ? 'JPY' : 'INR')).toThrow(MoneyParseError);
   });
 

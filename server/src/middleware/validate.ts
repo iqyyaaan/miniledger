@@ -9,7 +9,7 @@ export interface FieldError {
   message: string;
 }
 
-/** Flatten Zod's issue tree into `[{ field, message }]` the app can show inline. */
+// flattens Zod's issue tree into [{ field, message }] so the app can show it inline
 export function toFieldErrors(error: ZodError): FieldError[] {
   return error.issues.map((issue) => ({
     field: issue.path.join('.') || '_root',
@@ -17,12 +17,11 @@ export function toFieldErrors(error: ZodError): FieldError[] {
   }));
 }
 
-/**
- * Validate one part of the request against a schema and *replace* it with the
- * parsed result. That matters: downstream handlers then read coerced,
- * trimmed, defaulted values, and anything not in the schema is stripped —
- * so a client cannot smuggle an extra field like `userId` into an insert.
- */
+// validates one part of the request and REPLACES it with the parsed result.
+// that replace matters — handlers downstream get the coerced/trimmed/
+// defaulted values, and anything not declared in the schema just gets
+// dropped, so a client can't sneak an extra field like userId into a body
+// and have it end up in an insert
 export function validate<T extends ZodTypeAny>(schema: T, source: Source = 'body') {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req[source]);
@@ -33,8 +32,8 @@ export function validate<T extends ZodTypeAny>(schema: T, source: Source = 'body
     }
 
     if (source === 'query') {
-      // Express 5 makes req.query a getter; assigning to a side channel keeps
-      // this forward-compatible.
+      // req.query is a getter-only prop on Express 5, so this stashes the
+      // parsed value on a side channel instead — keeps it working either way
       (req as Request & { validatedQuery?: unknown }).validatedQuery = result.data;
     }
     (req as unknown as Record<Source, unknown>)[source] = result.data;
@@ -42,7 +41,7 @@ export function validate<T extends ZodTypeAny>(schema: T, source: Source = 'body
   };
 }
 
-/** Typed accessor for a validated query, paired with `validate(schema, 'query')`. */
+// typed accessor for a validated query — pair with validate(schema, 'query')
 export function validatedQuery<T extends ZodTypeAny>(req: Request): z.infer<T> {
   return ((req as Request & { validatedQuery?: unknown }).validatedQuery ?? req.query) as z.infer<T>;
 }

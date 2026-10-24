@@ -1,10 +1,7 @@
-/**
- * Runs before any test module is imported.
- *
- * `src/config/env.ts` reads `process.env` at import time and exits the process
- * if anything is missing, so these must be set first — otherwise importing a
- * module under test would kill the test runner.
- */
+// runs before any test module gets imported. src/config/env.ts reads
+// process.env right at import time and will exit the process if anything's
+// missing — so this has to happen first, or just importing a module under
+// test kills the whole test runner.
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent';
 process.env.JWT_SECRET ??= 'test-secret-that-is-definitely-long-enough-32';
@@ -13,9 +10,9 @@ process.env.DEFAULT_CURRENCY ??= 'INR';
 process.env.DEFAULT_COUNTRY_CODE ??= '+91';
 process.env.OTP_ECHO_IN_RESPONSE ??= 'true';
 
-// Points at the `db-test` service in docker-compose.yml (port 5433), which
-// uses a tmpfs volume — so the data never outlives the container, and the
-// database you are demoing against is never touched.
+// points at the db-test service in docker-compose.yml (port 5433) — tmpfs
+// backed, so data never outlives the container, and the database you're
+// actually demoing against never gets touched by a test run
 process.env.DATABASE_URL ??=
   'postgresql://miniledger:miniledger@localhost:5433/miniledger_test';
 

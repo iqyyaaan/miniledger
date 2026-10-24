@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { maskPhone, normalizePhone, PhoneParseError } from '../../src/lib/phone.js';
 
 describe('normalizePhone', () => {
-  /**
-   * The point of normalising: every one of these is the same human, and must
-   * resolve to one account rather than six.
-   */
+  // the whole point of normalizing — every one of these is the same
+  // person, and they all need to resolve to one account, not six
   it('maps every spelling of one number to the same E.164 string', () => {
     const variants = [
       '9876543210',

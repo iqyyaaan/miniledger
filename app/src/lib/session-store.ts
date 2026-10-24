@@ -1,21 +1,18 @@
 import type { AuthUser } from './api-types';
 import { clearTokens, loadTokens, saveTokens, type StoredTokens } from './token-storage';
 
-/**
- * The single source of truth for "who is signed in", held outside React.
- *
- * The API client (`api-client.ts`) needs to read the current access token on
- * every request and silently rotate it on a 401 — including from contexts
- * that are not React components (e.g. a retry inside a fetch wrapper). Making
- * that depend on a React context would mean threading a token through props
- * or reaching for context outside a component, neither of which is clean.
- *
- * A plain subscribable store is the standard way to share state between
- * "plumbing" code and the component tree: the API client reads/writes it
- * directly, and `useAuth` (api-client.tsx's sibling hook) subscribes so React
- * re-renders when it changes. This is exactly the shape `useSyncExternalStore`
- * is for.
- */
+// the single source of truth for "who's signed in," kept outside React on
+// purpose. api-client.ts needs to read the current access token on every
+// request and silently rotate it on a 401 — including from places that
+// aren't React components at all (a retry inside a plain fetch wrapper).
+// making that depend on a React context would mean threading a token
+// through props or reaching for context from outside a component, and
+// neither of those is clean.
+//
+// a plain subscribable store is the normal way to share state between
+// "plumbing" code and the component tree — the API client reads/writes it
+// directly, and useAuth subscribes so React re-renders when it changes.
+// basically what useSyncExternalStore exists for.
 
 export type SessionState =
   | { status: 'loading' }
@@ -40,18 +37,18 @@ export function subscribeToSession(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-/** Runs once at app start: restore whatever was in the keychain, if anything. */
+// runs once at app start — pulls back whatever was sitting in the keychain, if anything
 export async function hydrateSession(): Promise<void> {
   const tokens = await loadTokens();
-  // No cached user yet — the caller (AuthProvider) follows up with `GET /me`
-  // and calls `setSignedIn` again once that resolves, or `setSignedOut` if
-  // the tokens turn out to be stale.
+  // no cached user yet — useAuth follows up with GET /me and calls
+  // setSignedIn again once that resolves, or setSignedOut if the tokens
+  // turned out to be stale
   state = tokens ? { status: 'loading' } : { status: 'signedOut' };
   emit();
   if (tokens) pendingTokens = tokens;
 }
 
-/** Tokens restored from the keychain, held here until a user profile arrives. */
+// tokens pulled from the keychain, held here until a user profile actually shows up
 let pendingTokens: StoredTokens | null = null;
 export function consumePendingTokens(): StoredTokens | null {
   const tokens = pendingTokens;
@@ -65,7 +62,7 @@ export async function setSignedIn(tokens: StoredTokens, user: AuthUser): Promise
   emit();
 }
 
-/** Called by the API client after a silent refresh — no user re-fetch needed. */
+// called by the API client after a silent token refresh — no need to re-fetch the user
 export async function updateTokens(tokens: StoredTokens): Promise<void> {
   await saveTokens(tokens);
   if (state.status === 'signedIn') {

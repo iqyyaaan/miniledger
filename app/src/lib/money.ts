@@ -1,14 +1,10 @@
-/**
- * Client-side mirror of the server's `lib/money.ts`.
- *
- * The server is the source of truth for every stored amount, but the app
- * still needs to: (a) validate what a user typed *before* firing a network
- * request, so a bad amount fails instantly instead of round-tripping to the
- * API, and (b) format `amountMinor` for display without ever routing it
- * through a float. Keeping the same integer-minor-units approach on both
- * sides means a number never has two different "correct" values depending on
- * which side computed it.
- */
+// client-side mirror of the server's lib/money.ts. server's still the
+// source of truth for everything stored, but the app needs this for two
+// things: (a) validating what someone typed before a network request even
+// fires, so a bad amount fails instantly instead of round-tripping to the
+// API, and (b) formatting amountMinor for display without ever touching a
+// float. same integer-minor-units approach on both sides means a number
+// never has two different "correct" values depending on who computed it.
 
 export class MoneyParseError extends Error {
   constructor(message: string) {
@@ -23,7 +19,7 @@ function exponentFor(currency: string): number {
   return EXPONENT_BY_CURRENCY[currency.toUpperCase()] ?? 2;
 }
 
-/** Same digit-string arithmetic as the server — never `parseFloat(x) * 100`. */
+// same digit-string arithmetic as the server — never parseFloat(x) * 100
 export function parseAmountToMinor(input: string, currency = 'INR'): number {
   const exponent = exponentFor(currency);
   const cleaned = input.trim().replace(/[\s,]/g, '').replace(/^[^\d.-]+/, '');
@@ -52,7 +48,7 @@ export function parseAmountToMinor(input: string, currency = 'INR'): number {
   return minor;
 }
 
-/** Non-throwing version for inline form validation. */
+// non-throwing version, for inline form validation
 export function tryParseAmountToMinor(input: string, currency = 'INR'): number | null {
   try {
     return parseAmountToMinor(input, currency);
@@ -73,7 +69,7 @@ export function formatMinorAsDecimal(minor: number, currency = 'INR'): string {
 
 const formatterCache = new Map<string, Intl.NumberFormat>();
 
-/** `125050 -> "₹1,250.50"`. Formatters are expensive to construct, so reuse them. */
+// 125050 -> "₹1,250.50" — Intl.NumberFormat is pricey to construct, so cache them
 export function formatMinorAsCurrency(minor: number, currency = 'INR', locale = 'en-IN'): string {
   const key = `${locale}:${currency}`;
   let formatter = formatterCache.get(key);

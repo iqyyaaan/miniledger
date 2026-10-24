@@ -4,12 +4,10 @@ import { logger } from '../lib/logger.js';
 
 const { Pool, types } = pg;
 
-/**
- * node-postgres hands back `BIGINT` (oid 20) as a *string* by default, because
- * a 64-bit integer does not always fit in a JS number. Our amounts are capped
- * well below Number.MAX_SAFE_INTEGER (see lib/money.ts), so parsing to a
- * number here keeps the rest of the codebase free of string-vs-number checks.
- */
+// node-postgres returns BIGINT (oid 20) as a string by default since a
+// 64-bit int doesn't always fit in a JS number. our amounts are capped well
+// under Number.MAX_SAFE_INTEGER anyway (see lib/money.ts), so just parse it
+// to a number here instead of having string-vs-number checks everywhere
 types.setTypeParser(types.builtins.INT8, (value) => {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed)) {
@@ -18,12 +16,11 @@ types.setTypeParser(types.builtins.INT8, (value) => {
   return parsed;
 });
 
-/**
- * `DATE` (oid 1082) is a calendar day with no time and no zone. The default
- * parser turns it into a JS Date at local midnight, which then shifts by a day
- * the moment it is serialised to UTC. Keeping it as the raw `YYYY-MM-DD`
- * string is both correct and exactly what the API returns.
- */
+// DATE (oid 1082) is a calendar day, no time, no timezone. the default
+// parser turns it into a JS Date at local midnight, which then shifts by a
+// day the second it gets serialized to UTC — annoying bug to chase down.
+// keeping it as the raw "YYYY-MM-DD" string sidesteps all of that and
+// happens to be exactly what the API wants to return anyway.
 types.setTypeParser(types.builtins.DATE, (value) => value);
 
 export const pool = new Pool({
@@ -35,14 +32,14 @@ export const pool = new Pool({
 });
 
 pool.on('error', (error) => {
-  // An idle client blew up (network drop, server restart). The pool evicts it;
-  // we just need to not crash the process.
+  // an idle client died on us (network blip, server restart, whatever) —
+  // the pool evicts it on its own, we just need to not let this crash the process
   logger.error({ err: error }, 'Unexpected error on idle Postgres client');
 });
 
 export type SqlParam = string | number | boolean | Date | null | undefined | string[];
 
-/** Thin wrapper so every query goes through one place that can log timings. */
+// thin wrapper so every query goes through one spot that can log slow ones
 export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,
   params: SqlParam[] = [],
@@ -58,10 +55,8 @@ export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
   }
 }
 
-/**
- * Run a set of statements in a transaction on a single checked-out client.
- * Rolls back on any throw, and always returns the client to the pool.
- */
+// runs a set of statements as a transaction on one checked-out client.
+// rolls back on any throw, always releases the client back to the pool.
 export async function withTransaction<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {

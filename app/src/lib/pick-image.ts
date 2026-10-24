@@ -6,19 +6,17 @@ export interface PickedImage {
   mimeType: string;
 }
 
-/** Guesses a filename + mime type when the picker doesn't supply one (common on Android). */
+// guesses a filename/mime type when the picker doesn't hand one over — happens a lot on Android
 function toPickedImage(asset: ImagePicker.ImagePickerAsset): PickedImage {
   const extension = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
   const mimeType = asset.mimeType ?? (extension === 'png' ? 'image/png' : 'image/jpeg');
   return { uri: asset.uri, name: asset.fileName ?? `receipt.${extension}`, mimeType };
 }
 
-/**
- * Requests the relevant permission just-in-time (not at app launch — asking
- * before the user has expressed intent to use the camera is how permission
- * prompts train people to reflexively deny them) and returns `null` if the
- * user cancels or denies, so the caller doesn't need its own try/catch.
- */
+// asks for the relevant permission just-in-time, not at app launch —
+// prompting before someone's actually shown intent to use the camera is
+// exactly how people learn to reflexively tap "deny." returns null on
+// cancel/deny either way so callers don't need their own try/catch.
 export async function pickReceiptImage(source: 'camera' | 'library'): Promise<PickedImage | null> {
   const permission =
     source === 'camera'

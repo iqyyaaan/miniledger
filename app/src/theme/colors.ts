@@ -1,10 +1,8 @@
 import { useColorScheme } from 'react-native';
 
-/**
- * One palette, defined for light and dark, rather than per-component
- * light/dark branches. Every screen pulls colors from `useTheme()` so the
- * app follows the OS appearance setting automatically.
- */
+// one palette, defined for light and dark, instead of scattering
+// light/dark branches across every component. every screen pulls colors
+// from useTheme() so the app just follows the OS appearance setting.
 const light = {
   background: '#F7F8FA',
   surface: '#FFFFFF',

@@ -1,10 +1,8 @@
 import type { LoanStatusFilter } from './api-types';
 
-/**
- * Centralised so a mutation that needs to invalidate "every loans list
- * regardless of filter" can match on the `['loans', 'list']` prefix without
- * every call site re-deriving that shape.
- */
+// kept in one place so a mutation that needs to invalidate "every loans
+// list, whatever the filter" can just match on the ['loans', 'list'] prefix
+// instead of every call site re-deriving the key shape itself
 export const queryKeys = {
   summary: (asOf: string) => ['summary', asOf] as const,
   loansListRoot: ['loans', 'list'] as const,

@@ -15,19 +15,17 @@ import { docsRouter } from './docs/docs.routes.js';
 export function createApp(): Express {
   const app = express();
 
-  /**
-   * In development the API is reached over the LAN from a phone, so the
-   * client IP arrives via a proxy header in some setups. Trusting exactly one
-   * hop is the safe default: trusting all hops would let a client spoof
-   * `X-Forwarded-For` and sidestep the per-IP rate limits.
-   */
+  // in dev the API gets hit over the LAN from a phone, so the client IP can
+  // arrive via a proxy header depending on setup. trusting exactly one hop
+  // is the safe default here — trusting all of them would let a client
+  // just spoof X-Forwarded-For and dodge the per-IP rate limits
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
 
   app.use(
     helmet({
-      // The API serves JSON and images, never HTML that embeds third-party
-      // script — except the docs page, which sets its own policy.
+      // this API only serves JSON and images, no HTML embedding third-party
+      // script — except the docs page, which handles its own CSP
       contentSecurityPolicy: false,
       crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
@@ -41,8 +39,8 @@ export function createApp(): Express {
     }),
   );
 
-  // One id per request, echoed in the response header and every error body, so
-  // a user can quote it and we can find the exact log line.
+  // one id per request, echoed back in the response header and in every
+  // error body — lets someone quote it and we can go straight to the log line
   app.use(
     pinoHttp({
       logger,
@@ -52,7 +50,7 @@ export function createApp(): Express {
         res.setHeader('X-Request-Id', id);
         return id;
       },
-      // Health checks would otherwise drown out anything interesting.
+      // otherwise health checks drown out anything actually worth seeing
       autoLogging: { ignore: (req) => req.url === '/health' || req.url === '/api/health' },
       customLogLevel: (_req, res, err) => {
         if (err || res.statusCode >= 500) return 'error';
@@ -70,8 +68,8 @@ export function createApp(): Express {
   // -------------------------------------------------------------------------
 
   app.get('/api/health', async (_req, res) => {
-    // A health check that does not touch the database is close to useless —
-    // the process being alive is not the same as the service working.
+    // a health check that doesn't touch the DB isn't telling you much — the
+    // process being alive and the service actually working aren't the same thing
     try {
       await pool.query('SELECT 1');
       res.status(200).json({ status: 'ok', database: 'up', timestamp: new Date().toISOString() });
@@ -86,7 +84,7 @@ export function createApp(): Express {
   app.use('/api/summary', summaryRouter);
 
   // -------------------------------------------------------------------------
-  // Fallbacks — order matters: 404 first, then the error handler last.
+  // fallbacks — order matters here: 404 first, error handler last
   // -------------------------------------------------------------------------
   app.use(notFoundHandler);
   app.use(errorHandler);

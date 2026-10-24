@@ -50,8 +50,7 @@ export interface Summary {
     dueSoon: number;
     friends: number;
   };
-  /** 0–100. `null` when nothing has been lent, since 0/0 is not 0%. */
-  repaidPercent: number | null;
+  repaidPercent: number | null; // 0-100, null when nothing's been lent yet (0/0 isn't 0%)
   nextDueDate: string | null;
   oldestOverdueDate: string | null;
   dueSoonWindowDays: number;
@@ -64,19 +63,13 @@ export interface Summary {
   }>;
 }
 
-/**
- * The whole summary is **one** query.
- *
- * The naive version fetches every loan and reduces in JavaScript, which means
- * transferring the entire table to compute five numbers and getting slower
- * with every entry added. Aggregate `FILTER` clauses let Postgres make a
- * single pass over the user's rows and return exactly eleven scalars —
- * constant payload, and the work happens where the data already is.
- *
- * `FILTER (WHERE ...)` is also why this is one pass rather than five
- * correlated subqueries, and it reads far closer to the business question
- * than `SUM(CASE WHEN ... THEN ... ELSE 0 END)` does.
- */
+// the entire summary comes out of ONE query. the naive version — fetch every
+// loan, reduce in JS — ships the whole table over the wire just to compute
+// five numbers, and gets slower as the ledger grows. FILTER (WHERE ...) lets
+// Postgres do one pass and hand back eleven scalars instead, so the payload
+// stays constant no matter how many loans there are. also reads a lot closer
+// to the actual question than a pile of SUM(CASE WHEN ... THEN ... END)
+// would, and avoids five separate correlated subqueries.
 export async function getSummary(userId: string, asOf: string | null): Promise<Summary> {
   const params = [userId, asOf, env.APP_TIMEZONE, DUE_SOON_DAYS];
 
@@ -125,9 +118,9 @@ export async function getSummary(userId: string, asOf: string | null): Promise<S
     params,
   );
 
-  // An aggregate over zero rows still returns one row, so `rows[0]` is always
-  // present — but the COALESCEs above are what make it all zeros rather than
-  // a row full of NULLs.
+  // an aggregate over zero matching rows still returns one row, so rows[0]
+  // is always there — it's the COALESCEs up in the query that turn it into
+  // all zeros instead of a row full of nulls
   const row = rows[0] ?? {
     as_of: asOf ?? resolveToday(),
     total_lent_minor: 0,
@@ -182,8 +175,8 @@ export async function getSummary(userId: string, asOf: string | null): Promise<S
   };
 }
 
-/** "Who owes you the most" — grouped on the generated `friend_key`, so
- *  "Ravi", "ravi" and "Ravi " are one person. */
+// who owes the most — grouped on the generated friend_key column so
+// "Ravi" / "ravi" / "Ravi " all land in one bucket
 async function getTopDebtors(userId: string, asOf: string | null) {
   const { rows } = await query<FriendBreakdownRow>(
     `

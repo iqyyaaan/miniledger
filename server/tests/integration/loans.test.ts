@@ -117,7 +117,7 @@ describe('loans', () => {
         dueDate: daysFromToday(5),
       }).expect(201);
 
-      // Not overdue today, but would be from ten days in the future.
+      // not overdue today, but would be ten days from now
       const future = await session
         .auth(request(app).get(`/api/loans/${created.body.data.id}`).query({ asOf: daysFromToday(10) }))
         .expect(200);
@@ -141,12 +141,10 @@ describe('loans', () => {
       expect(second.body.error.details.code).toBe('already_repaid');
     });
 
-    /**
-     * The whole point of the conditional UPDATE in loans.repository.ts:
-     * fire the same "mark repaid" request many times concurrently and
-     * exactly one should succeed. A SELECT-then-UPDATE implementation would
-     * let several through.
-     */
+    // this is the whole point of the conditional UPDATE in
+    // loans.repository.ts — fire the same "mark repaid" request a bunch of
+    // times concurrently, exactly one should win. a SELECT-then-UPDATE
+    // version would let several through.
     it('under concurrent requests, exactly one mark-repaid succeeds', async () => {
       const created = await create({ friendName: 'Ravi', amount: '500', dueDate: daysFromToday(1) }).expect(
         201,
@@ -243,7 +241,7 @@ describe('loans', () => {
     });
 
     it('treats search input literally, not as a LIKE pattern', async () => {
-      // A search for a literal percent sign must not match every row.
+      // searching for a literal percent sign shouldn't match every row
       const res = await session
         .auth(request(app).get('/api/loans').query({ status: 'all', search: '50%' }))
         .expect(200);
@@ -388,8 +386,8 @@ describe('loans', () => {
         .attach('receipt', TINY_PNG, 'one.png')
         .expect(201);
 
-      // "Replace" is an upsert keyed on loan_id (one receipt per loan), so the
-      // row — and its id — is reused rather than a second row being created.
+      // "replace" is an upsert keyed on loan_id (one receipt per loan), so
+      // the row — and its id — gets reused instead of a second one appearing
       const second = await session
         .auth(request(app).put(`/api/loans/${loanId}/receipt`))
         .attach('receipt', TINY_PNG, 'two.png')
@@ -400,8 +398,8 @@ describe('loans', () => {
       const loan = await session.auth(request(app).get(`/api/loans/${loanId}`)).expect(200);
       expect(loan.body.data.receipt.id).toBe(first.body.data.id);
 
-      // And the old file on disk was cleaned up, not orphaned — downloading
-      // still works and returns the second upload's bytes.
+      // and the old file on disk actually got cleaned up, not left orphaned —
+      // downloading still works and returns the SECOND upload's bytes
       const download = await session.auth(request(app).get(`/api/loans/${loanId}/receipt`)).expect(200);
       expect(Buffer.compare(download.body, TINY_PNG)).toBe(0);
     });

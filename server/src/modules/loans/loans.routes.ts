@@ -18,14 +18,12 @@ import * as service from './loans.service.js';
 
 export const loansRouter = Router();
 
-// Every route below requires a signed-in user.
+// everything below this needs a signed-in user
 loansRouter.use(requireAuth);
 
-/**
- * Buffer the upload in memory rather than letting multer write to a temp file.
- * At a 5 MB cap and one photo per request that is cheap, and it means the
- * bytes are never on disk until they have passed the magic-number check.
- */
+// buffering the upload in memory instead of letting multer write a temp
+// file — at a 5MB cap and one photo per request that's cheap, and it means
+// nothing hits disk until it's passed the magic-number check
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: env.MAX_UPLOAD_BYTES, files: 1, fields: 4 },
@@ -80,7 +78,7 @@ loansRouter.post(
   }),
 );
 
-/** Powers the "who have I lent to before" autocomplete in the add form. */
+// powers the "who have I lent to before" autocomplete on the add-entry form
 loansRouter.get(
   '/friends',
   asyncHandler(async (req, res) => {
@@ -132,15 +130,11 @@ loansRouter.delete(
   }),
 );
 
-/**
- * Repayment is modelled as its own sub-resource rather than
- * `PATCH { status: 'repaid' }`.
- *
- * It is a state transition with a side effect (stamping `repaid_at`), not a
- * field assignment — POST says "do this once", and the 409 on a repeat is
- * meaningful, whereas a PATCH setting a field to the value it already has
- * ought to be a no-op 200.
- */
+// modeled repayment as its own sub-resource instead of a
+// PATCH { status: 'repaid' }. it's a state transition with a side effect
+// (stamping repaid_at), not just a field assignment — POST reads as "do
+// this once," and a 409 on repeat actually means something, whereas PATCHing
+// a field to the value it already has should really just be a 200 no-op.
 loansRouter.post(
   '/:id/repayment',
   validate(LoanIdParamsSchema, 'params'),
@@ -151,7 +145,7 @@ loansRouter.post(
   }),
 );
 
-/** Undo — for the inevitable mis-tap. */
+// the undo, for when someone mis-taps
 loansRouter.delete(
   '/:id/repayment',
   validate(LoanIdParamsSchema, 'params'),
@@ -192,15 +186,14 @@ loansRouter.get(
       req.params.id!,
     );
 
-    // A receipt is personal data: private caching only, and never let a
-    // shared proxy hold a copy.
+    // a receipt is someone's personal data — private caching only, never
+    // let a shared proxy cache a copy
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Length', String(sizeBytes));
     res.setHeader('Cache-Control', 'private, max-age=86400');
     res.setHeader('ETag', etag);
     res.setHeader('Content-Disposition', 'inline');
-    // Stop a browser from re-interpreting the bytes as something executable.
-    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Content-Type-Options', 'nosniff'); // stop a browser from re-sniffing this as something executable
 
     if (req.get('if-none-match') === etag) {
       res.status(304).end();

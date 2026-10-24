@@ -1,13 +1,10 @@
 import { DUE_SOON_WINDOW_DAYS } from './config';
 import type { Loan, LoanStatusFilter } from './api-types';
 
-/**
- * Client-side mirror of the `WHERE` logic in `loans.repository.ts#listLoans`.
- *
- * Needed for optimistic cache updates: after marking a loan repaid, every
- * *other* open filter tab's cached list (overdue, due-soon, all, ...) needs
- * to decide — without a round-trip — whether that loan still belongs in it.
- */
+// client-side mirror of the WHERE logic in loans.repository.ts#listLoans.
+// needed for the optimistic cache updates — after marking something repaid,
+// every OTHER open filter tab (overdue, due-soon, all, ...) has to decide,
+// without a round-trip, whether that loan still belongs on its list.
 export function loanMatchesStatus(loan: Loan, status: LoanStatusFilter): boolean {
   switch (status) {
     case 'all':

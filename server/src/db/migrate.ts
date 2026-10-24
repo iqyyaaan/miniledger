@@ -5,23 +5,21 @@ import { fileURLToPath } from 'node:url';
 import { closePool, pool } from './pool.js';
 import { logger } from '../lib/logger.js';
 
-/**
- * A deliberately small forward-only migration runner.
- *
- * Why hand-rolled rather than a library: the whole contract is "run each .sql
- * file in `migrations/` exactly once, in order, inside a transaction, and
- * record that you did". That is ~60 lines, and it keeps the schema as plain
- * SQL that anyone can read without learning a DSL.
- *
- * Two safety properties beyond "has it run":
- *   - A checksum is stored, so editing an already-applied migration is caught
- *     instead of silently diverging between machines.
- *   - A session-level advisory lock serialises concurrent runners, so two API
- *     instances booting at once cannot apply the same file twice.
- */
+// small forward-only migration runner, hand-rolled instead of pulling in a
+// library. the whole job is "run each .sql file in migrations/ once, in
+// order, inside a transaction, and remember that it ran" — didn't feel like
+// that needed a dependency, and this way the schema stays plain SQL that
+// doesn't require learning some tool's DSL to read.
+//
+// two things beyond just "has it run":
+//   - checksums get stored, so if someone edits an already-applied
+//     migration file it gets caught instead of quietly diverging across
+//     machines
+//   - an advisory lock serializes concurrent runs, so if two API instances
+//     boot at the same time they don't both try to apply the same file
 
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
-const ADVISORY_LOCK_KEY = 4_171_983; // Arbitrary but fixed for this app.
+const ADVISORY_LOCK_KEY = 4_171_983; // arbitrary, just has to be fixed for this app
 
 interface MigrationFile {
   name: string;
@@ -80,8 +78,8 @@ export async function runMigrations(): Promise<{ applied: string[] }> {
       }
 
       logger.info({ migration: migration.name }, 'Applying migration');
-      // Each migration is all-or-nothing. Postgres supports transactional DDL,
-      // so a failure halfway through leaves no partial schema behind.
+      // all or nothing — Postgres supports transactional DDL, so a failure
+      // partway through doesn't leave a half-applied schema behind
       await client.query('BEGIN');
       try {
         await client.query(migration.sql);
@@ -122,7 +120,7 @@ async function status(): Promise<void> {
   }
 }
 
-// CLI entrypoint: `npm run migrate` / `npm run migrate:status`.
+// CLI entry point — npm run migrate / npm run migrate:status
 const isDirectRun = process.argv[1]?.includes('migrate');
 if (isDirectRun) {
   const command = process.argv[2] ?? 'up';

@@ -10,11 +10,9 @@ import * as service from './auth.service.js';
 
 export const authRouter = Router();
 
-/**
- * `.transform(normalizePhone)` runs inside validation, so by the time a
- * handler sees `req.body.phone` it is already E.164. Every downstream
- * lookup therefore compares the same canonical string.
- */
+// the .transform(normalizePhone) runs as part of validation, so by the time
+// a handler sees req.body.phone it's already E.164 — every lookup past
+// this point is comparing the same canonical string
 const phoneField = z
   .string({ required_error: 'Phone number is required.' })
   .min(6, 'Enter a valid phone number.')
@@ -54,12 +52,10 @@ const ProfileSchema = z
   })
   .strict();
 
-/**
- * Two limits guard OTP requests: per IP (stops one host enumerating many
- * numbers) and per phone (stops many hosts hammering one number). The
- * per-phone count lives in the database so it survives a restart; this is the
- * cheap in-memory first line.
- */
+// two layers of limit on OTP requests: per-IP here (stops one host from
+// enumerating a bunch of phone numbers) and per-phone down in the service,
+// backed by the DB so it survives a restart. this is just the cheap
+// in-memory first line of defense.
 const requestOtpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -87,8 +83,7 @@ authRouter.post(
       phone,
       expiresInSeconds: result.expiresInSeconds,
       otpLength: env.OTP_LENGTH,
-      // Present only in development; see OTP_ECHO_IN_RESPONSE.
-      devCode: result.devCode,
+      devCode: result.devCode, // only present in dev — see OTP_ECHO_IN_RESPONSE
     });
   }),
 );

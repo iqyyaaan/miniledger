@@ -3,17 +3,15 @@ import { buildOpenApiDocument } from './openapi.js';
 
 export const docsRouter = Router();
 
-/** The machine-readable contract — importable into Postman, Insomnia, codegen. */
+// the machine-readable contract, importable straight into Postman/Insomnia/codegen
 docsRouter.get('/openapi.json', (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   res.status(200).json(buildOpenApiDocument(baseUrl));
 });
 
-/**
- * Human-readable docs. Scalar is loaded from a CDN rather than vendored,
- * which keeps the dependency out of `package.json` — it is a development
- * convenience, not something the API needs to function.
- */
+// human-readable docs page. Scalar loads from a CDN instead of being
+// vendored in — it's a dev convenience, not something the API actually
+// needs to run, so no reason to add it as a real dependency
 docsRouter.get('/', (_req, res) => {
   res.type('html').status(200).send(`<!doctype html>
 <html>

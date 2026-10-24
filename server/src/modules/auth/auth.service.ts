@@ -19,17 +19,13 @@ export interface AuthenticatedSession extends SessionTokens {
   isNewUser: boolean;
 }
 
-/** How many codes one phone may request per window, independent of IP. */
+// per-phone cap, separate from the per-IP rate limiter on the route itself
 const OTP_SENDS_PER_PHONE = 5;
 const OTP_SEND_WINDOW_SECONDS = 15 * 60;
 
-/**
- * Step 1 of login: generate a code, store only its hash, and "send" it.
- *
- * Returns the code itself only when `OTP_ECHO_IN_RESPONSE` is on (development),
- * which lets the app prefill the field for a smooth demo. The authoritative
- * delivery is always the server log, as the brief asks.
- */
+// Step 1 of login. Generates a code, stores only the hash, "sends" it.
+// devCode only comes back when OTP_ECHO_IN_RESPONSE is on — lets the app
+// autofill during local dev/demo. Real delivery is always the server log.
 export async function requestOtp(phone: string): Promise<{ expiresInSeconds: number; devCode?: string }> {
   const recentSends = await repo.countRecentOtps(phone, OTP_SEND_WINDOW_SECONDS);
   if (recentSends >= OTP_SENDS_PER_PHONE) {
@@ -39,8 +35,8 @@ export async function requestOtp(phone: string): Promise<{ expiresInSeconds: num
     );
   }
 
-  // Invalidate earlier codes first: if a user taps "resend", only the newest
-  // code should work. Otherwise every resend widens the guessable surface.
+  // kill any earlier code before issuing a new one — otherwise "resend" just
+  // adds another valid guess to the pile instead of replacing the old one
   await repo.consumeOutstandingOtps(phone);
 
   const code = generateNumericOtp(env.OTP_LENGTH);
@@ -55,27 +51,21 @@ export async function requestOtp(phone: string): Promise<{ expiresInSeconds: num
   };
 }
 
-/**
- * Step 2: verify the code and mint a session.
- *
- * The whole check runs in one transaction with the OTP row locked
- * `FOR UPDATE`, so concurrent guesses are serialised and each one really does
- * cost an attempt. Creating the user, consuming the code and issuing the
- * refresh token are all in that same transaction — there is no state where a
- * code is spent but no session exists.
- */
+// Step 2: check the code, mint a session.
+//
+// Runs as one transaction with the OTP row locked FOR UPDATE, so two
+// concurrent guesses can't both read "4 attempts left" and both proceed —
+// they get serialized and each actually costs an attempt. User creation,
+// burning the code, and issuing the refresh token all happen in the same
+// transaction too, so there's no window where the code is spent but login
+// didn't actually go through.
 export async function verifyOtp(phone: string, code: string): Promise<AuthenticatedSession> {
-  /**
-   * Same shape of bug as `refreshSession`: `withTransaction` rolls back on
-   * any throw from its callback. Throwing "incorrect code" *inside* the
-   * transaction would roll back the `incrementOtpAttempts` write we just
-   * made, so a wrong guess would never actually cost an attempt and the
-   * lockout could never trigger.
-   *
-   * So the callback only ever returns — recording the attempt and deciding
-   * the outcome tag in the same commit — and the throw happens after, where
-   * it can no longer undo anything.
-   */
+  // careful: withTransaction rolls back on ANY throw from the callback.
+  // I originally threw "incorrect code" straight from inside here and it
+  // silently undid the incrementOtpAttempts() write along with it — meaning
+  // a wrong guess never actually cost an attempt and the lockout never
+  // fired. fix is to only ever return a result tag from the callback and
+  // throw afterward, once the transaction has already committed.
   type Outcome =
     | { kind: 'ok'; session: AuthenticatedSession }
     | { kind: 'invalid' }
@@ -106,7 +96,7 @@ export async function verifyOtp(phone: string, code: string): Promise<Authentica
       return { kind: 'invalid' };
     }
 
-    // Correct. Burn the code so it cannot be replayed.
+    // right code — burn it so it can't be replayed
     await repo.markOtpConsumed(client, otp.id);
 
     const existingUser = await client.query<{ exists: boolean }>(
@@ -116,8 +106,8 @@ export async function verifyOtp(phone: string, code: string): Promise<Authentica
     const isNewUser = !existingUser.rows[0]?.exists;
 
     const user = await repo.upsertUserByPhone(client, phone);
-    // `refreshTokenId` is the internal DB row id used for rotation
-    // bookkeeping — it must never leave this process.
+    // refreshTokenId is just our internal row id for rotation bookkeeping,
+    // doesn't belong in the API response
     const { refreshTokenId: _ignored, ...tokens } = await issueTokens(client, user.id, user.phone);
 
     return {
@@ -139,9 +129,9 @@ export async function verifyOtp(phone: string, code: string): Promise<Authentica
     throw tooManyRequests('Too many incorrect attempts. Request a new code.');
   }
   if (outcome.kind === 'invalid') {
-    // Deliberately identical message for "no code", "expired" and "wrong
-    // code": a caller must not be able to probe which phone numbers have a
-    // pending login, or learn that a code exists but is wrong.
+    // same message for "no code", "expired", and "wrong code" on purpose —
+    // don't want to give callers a way to tell which phone numbers have a
+    // login in progress
     throw unauthorized('That code is incorrect or has expired.');
   }
 
@@ -165,26 +155,17 @@ async function issueTokens(
   return { accessToken, refreshToken, expiresIn, tokenType: 'Bearer', refreshTokenId: row.id };
 }
 
-/**
- * Exchange a refresh token for a new pair, rotating as we go.
- *
- * Rotation means each refresh token is single-use. If a token that has
- * *already been rotated* shows up again, the only explanations are a stolen
- * token or a cloned device — so we revoke every live token for that user and
- * force a fresh login. This is the standard refresh-token-reuse detection from
- * OAuth 2.0 BCP.
- */
+// Exchange a refresh token for a new pair, rotating as we go — each refresh
+// token is single-use. If a token that's already been rotated shows up
+// again, that's not a normal race, it means someone replayed a stolen (or
+// duplicated) token. So we nuke every live session for that user and make
+// them log in again. Standard refresh-token-reuse detection, same idea as
+// OAuth 2.0's BCP recommendation.
 export async function refreshSession(refreshToken: string): Promise<SessionTokens> {
-  /**
-   * `withTransaction` rolls back on *any* throw from the callback — including
-   * one we raise deliberately to report "reuse detected" to the caller. That
-   * would undo the very revocation this function just performed, leaving the
-   * reused token's whole family still live.
-   *
-   * So the callback never throws for an outcome that should still be
-   * committed: it returns a tagged result, the transaction always commits,
-   * and only then do we throw based on that tag.
-   */
+  // same gotcha as verifyOtp above — don't throw from inside the
+  // transaction callback for an outcome you still want committed, or the
+  // revocation gets rolled back along with the "error". return a tag,
+  // commit, throw after.
   type Outcome =
     | { kind: 'ok'; tokens: SessionTokens }
     | { kind: 'reuse_detected' }
@@ -242,7 +223,7 @@ export async function refreshSession(refreshToken: string): Promise<SessionToken
   }
 }
 
-/** Idempotent by design: signing out twice is not an error worth surfacing. */
+// signing out twice isn't an error, just make it idempotent
 export async function logout(refreshToken: string): Promise<void> {
   await repo.revokeRefreshToken(sha256(refreshToken));
 }

@@ -4,21 +4,16 @@ import { logger } from '../lib/logger.js';
 import { parseAmountToMinor } from '../lib/money.js';
 import { resolveToday } from '../modules/loans/loans.service.js';
 
-/**
- * Seeds a demo account so the app has something to show on first run — and so
- * the summary card has overdue, due-soon and repaid entries to render rather
- * than five zeros.
- *
- * Due dates are relative to today, so the seed data stays meaningful no matter
- * when it is run.
- */
+// seeds a demo account so there's something to actually look at on first
+// run — summary card gets overdue/due-soon/repaid entries instead of five
+// zeros. due dates are relative to today, so this stays meaningful whenever
+// it's run, not just on the day it was written.
 const DEMO_PHONE = '+919876543210';
 
 interface SeedLoan {
   friendName: string;
   amount: string;
-  /** Days from today. Negative = already overdue. */
-  dueInDays: number;
+  dueInDays: number; // negative = already overdue
   note?: string;
   repaid?: boolean;
 }
@@ -55,7 +50,7 @@ async function seed(): Promise<void> {
     );
     const userId = rows[0]!.id;
 
-    // Re-running the seed should give the same result, not duplicates.
+    // running this twice should give the same result, not a pile of duplicates
     const { rowCount } = await client.query('DELETE FROM loans WHERE user_id = $1', [userId]);
     if (rowCount) logger.info(`Cleared ${rowCount} existing demo loan(s)`);
 

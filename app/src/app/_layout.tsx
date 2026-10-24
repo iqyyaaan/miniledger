@@ -7,8 +7,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/hooks/use-auth';
 
-// Kept up until the very first auth check resolves, so the app never flashes
-// a login screen for a user who turns out to already have a valid session.
+// stays up until the first auth check resolves, so the app never flashes a
+// login screen at someone who actually still has a valid session
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 const queryClient = new QueryClient({

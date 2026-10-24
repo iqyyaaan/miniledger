@@ -7,16 +7,13 @@ import {
   updateTokens,
 } from './session-store';
 
-/**
- * A single in-flight refresh promise, shared by every caller.
- *
- * Without this, three screens whose queries all 401 at once would each fire
- * their own `/auth/refresh` — and since a refresh token is single-use (the
- * server rotates it), only the first would succeed; the other two would hit
- * the reuse-detection path and get the *whole session* revoked. Collapsing
- * concurrent refreshes into one request is not an optimisation here, it is
- * what makes concurrent requests work at all.
- */
+// one in-flight refresh promise, shared by every caller. without this,
+// three screens whose queries all 401 at the same moment would each fire
+// their own /auth/refresh — and since a refresh token is single-use (the
+// server rotates it), only the first would actually succeed. the other two
+// would hit the reuse-detection path and get the WHOLE session revoked.
+// collapsing concurrent refreshes into one isn't an optimization here,
+// it's the only way concurrent requests work at all.
 let refreshInFlight: Promise<string | null> | null = null;
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -42,8 +39,8 @@ async function refreshAccessToken(): Promise<string | null> {
       await updateTokens({ accessToken: body.accessToken, refreshToken: body.refreshToken });
       return body.accessToken;
     } catch {
-      // A network blip while refreshing should not sign the user out — the
-      // original request below will simply fail and the caller can retry.
+      // a network blip during the refresh itself shouldn't sign anyone out —
+      // the original request just fails and the caller can retry
       return null;
     }
   })();
@@ -59,8 +56,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
   query?: Record<string, string | number | undefined | null>;
-  /** Auth endpoints (login, refresh) must never trigger the refresh-and-retry dance. */
-  skipAuth?: boolean;
+  skipAuth?: boolean; // auth endpoints (login, refresh) must never trigger the refresh-and-retry dance
   signal?: AbortSignal;
 }
 
@@ -82,12 +78,9 @@ async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> 
   }
 }
 
-/**
- * The one function every API call in the app goes through.
- *
- * `allowRetry` guards against an infinite loop: a request retried *after* a
- * token refresh that itself gets a 401 must fail rather than refresh again.
- */
+// the one function every API call in the app funnels through. allowRetry
+// guards against an infinite loop — a request retried after a token
+// refresh that itself still 401s has to just fail, not refresh again forever.
 async function request<T>(path: string, options: RequestOptions = {}, allowRetry = true): Promise<T> {
   const { method = 'GET', body, query, skipAuth, signal } = options;
 
@@ -132,13 +125,11 @@ export const api = {
   delete: <T>(path: string, query?: RequestOptions['query']) => request<T>(path, { method: 'DELETE', query }),
 };
 
-/**
- * Multipart upload (the receipt photo) can't go through `request()` — it must
- * not set `Content-Type` itself, since `fetch` needs to generate the
- * multipart boundary. The 401-retry logic is duplicated rather than shared
- * because the two bodies (JSON vs FormData) aren't safely re-sendable through
- * one code path once consumed.
- */
+// the receipt upload can't go through request() — it must NOT set
+// Content-Type itself, since fetch needs to generate the multipart
+// boundary on its own. the 401-retry logic ends up duplicated instead of
+// shared because a JSON body and a FormData body aren't safely re-sendable
+// through the same code path once either one's been consumed.
 export async function apiUpload<T>(
   path: string,
   form: FormData,
@@ -159,7 +150,7 @@ export async function apiUpload<T>(
   return (await response.json()) as T;
 }
 
-/** For `expo-image`'s `source.headers` — the receipt endpoint requires auth. */
+// for expo-image's source.headers — the receipt endpoint needs auth too
 export function authHeaders(): Record<string, string> {
   const token = currentAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};

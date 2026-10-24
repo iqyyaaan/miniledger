@@ -26,11 +26,9 @@ export interface RefreshTokenRow {
   replaced_by: string | null;
 }
 
-/**
- * All SQL for authentication lives here. Keeping queries out of the service
- * means the service reads as policy ("has this expired, are attempts left")
- * and this file reads as storage.
- */
+// all the auth SQL lives in this file. keeping queries out of the service
+// means auth.service.ts reads like policy ("has this expired, any attempts
+// left") and this one reads like plain storage
 
 export async function insertOtp(
   phone: string,
@@ -46,7 +44,7 @@ export async function insertOtp(
   return rows[0]!;
 }
 
-/** Issuing a new code invalidates any earlier one, so only the latest works. */
+// issuing a new code kills any earlier one — only the latest ever works
 export async function consumeOutstandingOtps(phone: string): Promise<void> {
   await query(
     `UPDATE otp_codes
@@ -67,11 +65,9 @@ export async function countRecentOtps(phone: string, withinSeconds: number): Pro
   return rows[0]?.count ?? 0;
 }
 
-/**
- * Fetch the newest live challenge for a phone and lock it `FOR UPDATE`, so two
- * concurrent verify requests cannot both read `attempts = 4` and each decide
- * they have an attempt left.
- */
+// grabs the newest live challenge for a phone and locks it FOR UPDATE, so
+// two concurrent verify requests can't both read "attempts = 4" and both
+// decide they've still got a guess left
 export async function findLatestActiveOtpForUpdate(
   client: PoolClient,
   phone: string,
@@ -100,11 +96,10 @@ export async function markOtpConsumed(client: PoolClient, otpId: string): Promis
   await client.query('UPDATE otp_codes SET consumed_at = now() WHERE id = $1', [otpId]);
 }
 
-/**
- * Find-or-create in one statement. `ON CONFLICT DO UPDATE` (rather than
- * DO NOTHING) guarantees a row is always RETURNED, and the unique index on
- * `phone` makes it race-safe: two simultaneous first logins produce one user.
- */
+// find-or-create in a single statement. ON CONFLICT DO UPDATE (instead of
+// DO NOTHING) guarantees something always comes back from RETURNING, and
+// the unique index on phone makes this race-safe — two people's very first
+// login hitting at the same instant still end up as exactly one user row.
 export async function upsertUserByPhone(client: PoolClient, phone: string): Promise<UserRow> {
   const { rows } = await client.query<UserRow>(
     `INSERT INTO users (phone)
@@ -181,7 +176,7 @@ export async function revokeRefreshToken(tokenHash: string): Promise<boolean> {
   return (rowCount ?? 0) > 0;
 }
 
-/** Used when a reused (already-rotated) token is detected — kill the family. */
+// called once a reused (already-rotated) token is detected — kill the whole session family
 export async function revokeAllRefreshTokensForUser(
   client: PoolClient,
   userId: string,

@@ -1,13 +1,12 @@
 import { StyleSheet, TextInput, View } from 'react-native';
 import { useTheme } from '@/theme/colors';
 
-/**
- * One hidden `TextInput` actually receives the keystrokes; the boxes the user
- * sees are just a rendering of `value`. This is the standard trick for a
- * "digit box" OTP field on mobile — it keeps the platform's native numeric
- * keypad, autofill-from-SMS, and paste behaviour, which six separately
- *-focused inputs would each have to reimplement and would get subtly wrong.
- */
+// one hidden TextInput actually catches the keystrokes — the boxes you see
+// are just a rendering of `value`. this is the normal trick for a
+// "digit box" OTP field on mobile, and it's worth it specifically because
+// it keeps the native numeric keypad, SMS autofill, and paste behavior for
+// free. six separately-focused inputs would each have to reimplement all
+// of that and would get at least one of them subtly wrong.
 export function OtpInput({
   length,
   value,

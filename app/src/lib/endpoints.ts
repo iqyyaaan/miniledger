@@ -74,7 +74,7 @@ export const loansApi = {
 
   uploadReceipt: (id: string, file: { uri: string; name: string; mimeType: string }) => {
     const form = new FormData();
-    // React Native's FormData accepts this shape in place of a web File/Blob.
+    // RN's FormData is fine with this shape instead of a real web File/Blob
     form.append('receipt', { uri: file.uri, name: file.name, type: file.mimeType } as unknown as Blob);
     return apiUpload<{ data: { id: string; mimeType: string; sizeBytes: number; url: string } }>(
       `/api/loans/${id}/receipt`,

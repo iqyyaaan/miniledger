@@ -37,7 +37,7 @@ describe('auth', () => {
     expect(verified.body.user.phone).toBe('+919876543210');
     expect(verified.body.accessToken).toBeTruthy();
     expect(verified.body.refreshToken).toBeTruthy();
-    // The DB row id behind the refresh token is bookkeeping, not API surface.
+    // that's just internal bookkeeping, shouldn't leak into the API response
     expect(verified.body.refreshTokenId).toBeUndefined();
   });
 
@@ -57,8 +57,8 @@ describe('auth', () => {
       .send({ phone: '+918888888888', code: '000000' })
       .expect(401);
 
-    // Identical message either way — no oracle for "does this number have a
-    // pending code".
+    // same message either way, no way to tell from outside whether a given
+    // number even has a pending login
     expect(wrongPhone.body.error.message).toBe(rightPhoneWrongCode.body.error.message);
     void otp;
   });
@@ -124,16 +124,15 @@ describe('auth', () => {
 
     expect(refreshed.body.refreshToken).not.toBe(session.refreshToken);
 
-    // Replaying the now-retired token is reuse, not just "expired" — the
-    // service must revoke the whole session family.
+    // replaying the now-retired token is reuse, not just "expired" — this
+    // should nuke the whole session family, not just reject the one call
     const reuse = await request(app)
       .post('/api/auth/refresh')
       .send({ refreshToken: session.refreshToken })
       .expect(409);
     expect(reuse.body.error.code).toBe('conflict');
 
-    // The token that replaced it is now revoked too, collateral to the
-    // reuse-detection response.
+    // the replacement token is collateral damage of the reuse detection — also dead now
     await request(app)
       .post('/api/auth/refresh')
       .send({ refreshToken: refreshed.body.refreshToken })

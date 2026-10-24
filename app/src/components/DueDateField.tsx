@@ -16,8 +16,8 @@ export function DueDateField({ value, onChange }: { value: string; onChange: (is
   const today = todayIso();
 
   const handleNativeChange = (event: { type: string }, date?: Date) => {
-    // Android's dialog fires once and closes itself; iOS's inline spinner
-    // keeps firing as the user scrolls, so it stays open until "Done".
+    // Android's dialog fires once and closes itself. iOS's inline spinner
+    // keeps firing on every scroll, so it needs to stay open until "Done".
     if (Platform.OS === 'android') setShowPicker(false);
     if (event.type === 'set' && date) onChange(toIsoDate(date));
   };

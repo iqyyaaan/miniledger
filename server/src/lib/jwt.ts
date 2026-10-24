@@ -6,11 +6,9 @@ const ISSUER = 'miniledger';
 const AUDIENCE = 'miniledger-app';
 
 export interface AccessTokenClaims {
-  /** User id. */
-  sub: string;
+  sub: string; // user id
   phone: string;
-  /** Token type, so a refresh token can never be replayed as an access token. */
-  typ: 'access';
+  typ: 'access'; // so a refresh token can't be replayed here as an access token
 }
 
 export function signAccessToken(userId: string, phone: string): { token: string; expiresIn: number } {
@@ -30,8 +28,9 @@ export function verifyAccessToken(token: string): AccessTokenClaims {
     const payload = jwt.verify(token, env.JWT_SECRET, {
       issuer: ISSUER,
       audience: AUDIENCE,
-      // Pinning the algorithm closes the "alg: none" / HS-vs-RS confusion class
-      // of attacks, where the attacker picks how their token gets verified.
+      // pin the algorithm explicitly — otherwise you're open to the classic
+      // "alg: none" / HS-vs-RS confusion attack where the token itself gets
+      // to pick how it's verified
       algorithms: ['HS256'],
     }) as jwt.JwtPayload;
 

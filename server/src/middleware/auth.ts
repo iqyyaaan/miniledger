@@ -7,14 +7,11 @@ export interface AuthenticatedUser {
   phone: string;
 }
 
-/**
- * Requires a valid `Authorization: Bearer <access token>` header.
- *
- * No database round-trip: the token is signed and short-lived (15 min), so
- * verifying the signature is enough to establish identity. Revocation is
- * handled at the refresh step, which bounds how long a revoked session can
- * keep working to one access-token lifetime.
- */
+// requires a valid "Authorization: Bearer <token>" header. no DB lookup
+// here — the token's signed and short-lived (15 min), so checking the
+// signature is enough to know who's calling. revocation happens at the
+// refresh step instead, which just means a revoked session can keep
+// working for at most one access-token lifetime, not forever.
 export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
   const header = req.get('authorization');
 
@@ -38,7 +35,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
   }
 }
 
-/** Narrowing helper so handlers don't need `req.user!` everywhere. */
+// just a narrowing helper so route handlers don't have to write req.user! everywhere
 export function currentUser(req: Request): AuthenticatedUser {
   if (!req.user) throw unauthorized();
   return req.user;

@@ -1,15 +1,12 @@
-/**
- * Opaque pagination cursors for keyset ("seek") pagination.
- *
- * The cursor is just the sort tuple — `dueDate|id` — base64url-encoded so it
- * is opaque to the client and survives being put in a URL. It is deliberately
- * *not* signed: it carries no authority. Every query that uses one is still
- * scoped to `user_id`, so a forged cursor can at most point at a different
- * page of the caller's own data.
- *
- * It lives here rather than in the repository so it is a pure function with no
- * database import — which is what lets it be unit-tested on its own.
- */
+// opaque cursors for keyset pagination. the cursor is literally just the
+// sort tuple (dueDate|id), base64url-encoded so it's opaque to the client
+// and survives sitting in a URL. not signed on purpose — it carries no
+// authority. every query using one is still scoped to user_id, so the worst
+// a forged cursor can do is point at a different page of your OWN data.
+//
+// lives in its own file instead of the repository so it stays a pure
+// function with zero DB import, which is what makes it unit-testable
+// on its own without spinning up Postgres.
 
 export interface LoanCursor {
   dueDate: string;
@@ -20,13 +17,9 @@ export function encodeCursor(dueDate: string, id: string): string {
   return Buffer.from(`${dueDate}|${id}`, 'utf8').toString('base64url');
 }
 
-/**
- * Returns `null` for anything that is not exactly `YYYY-MM-DD|<uuid>`.
- *
- * Validating the shape here means a malformed cursor becomes a clean 400
- * instead of reaching Postgres and failing a `::date`/`::uuid` cast, which
- * would surface as a 500.
- */
+// returns null for anything that isn't exactly YYYY-MM-DD|<uuid>. checking
+// the shape here turns a malformed cursor into a clean 400 instead of
+// letting it reach Postgres and blow up a ::date/::uuid cast as a 500.
 export function decodeCursor(cursor: string): LoanCursor | null {
   try {
     const decoded = Buffer.from(cursor, 'base64url').toString('utf8');

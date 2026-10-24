@@ -1,20 +1,16 @@
 import type { NextFunction, Request, Response } from 'express';
 import { tooManyRequests } from '../lib/errors.js';
 
-/**
- * A fixed-window rate limiter held in process memory.
- *
- * Honest about its limits: this resets when the process restarts and does not
- * coordinate across instances, so behind a load balancer each instance keeps
- * its own count. For a single-instance assignment API that is the right
- * trade-off — no Redis to run, no extra dependency to explain. The swap to
- * Redis `INCR`/`EXPIRE` is a change to `hit()` only, because every caller
- * already goes through this one function.
- *
- * It exists specifically to make brute-forcing a 6-digit OTP impractical:
- * 10^6 possibilities against 5 verify attempts per code and a capped number
- * of sends per window.
- */
+// fixed-window rate limiter, held in process memory. being upfront about
+// its limits: resets on restart, doesn't coordinate across instances, so
+// behind a load balancer each one keeps its own count. fine for a
+// single-instance API — didn't want to spin up Redis just for this. if it
+// ever needs to scale out, swapping hit() for Redis INCR/EXPIRE is a
+// one-function change since every caller already goes through it.
+//
+// the actual reason this exists: makes brute-forcing a 6-digit OTP
+// impractical. 10^6 possible codes vs. 5 verify attempts per code plus a
+// cap on how many codes you can even request.
 
 interface Bucket {
   count: number;
@@ -22,25 +18,23 @@ interface Bucket {
 }
 
 export interface RateLimitOptions {
-  /** Window length in milliseconds. */
   windowMs: number;
-  /** Requests allowed per key per window. */
-  max: number;
-  /** What counts as "the same caller". Defaults to client IP. */
-  keyBy?: (req: Request) => string;
+  max: number; // requests allowed per key per window
+  keyBy?: (req: Request) => string; // defaults to client IP
   message?: string;
 }
 
 const buckets = new Map<string, Bucket>();
 
-// Without this, a long-running process accumulates one entry per key forever.
+// without this, a long-running process just accumulates one map entry per
+// key forever and never frees them
 const sweeper = setInterval(() => {
   const now = Date.now();
   for (const [key, bucket] of buckets) {
     if (bucket.resetAt <= now) buckets.delete(key);
   }
 }, 60_000);
-sweeper.unref(); // Don't hold the event loop open on shutdown.
+sweeper.unref(); // don't let this timer keep the process alive on shutdown
 
 export function hit(key: string, windowMs: number, max: number): { allowed: boolean; retryAfterSeconds: number; remaining: number } {
   const now = Date.now();
@@ -89,7 +83,7 @@ export function clientIp(req: Request): string {
   return req.ip ?? req.socket.remoteAddress ?? 'unknown';
 }
 
-/** Test helper — lets each test start from a clean slate. */
+// test helper, gives each test a clean slate
 export function resetRateLimits(): void {
   buckets.clear();
 }

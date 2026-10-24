@@ -1,11 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
 
-/**
- * Tokens live in the OS keychain/keystore via `expo-secure-store`, not
- * `AsyncStorage`. AsyncStorage on Android is unencrypted (and on iOS is a
- * plain plist-backed file) — fine for "which tab was open", wrong for a
- * refresh token that is a long-lived bearer credential for the account.
- */
+// tokens live in the OS keychain/keystore via expo-secure-store, not
+// AsyncStorage. AsyncStorage is unencrypted on Android (and just a plain
+// plist file on iOS) — fine for "which tab was open last," not fine for a
+// refresh token that's basically a long-lived bearer credential for the account.
 const ACCESS_TOKEN_KEY = 'miniledger.accessToken';
 const REFRESH_TOKEN_KEY = 'miniledger.refreshToken';
 

@@ -8,8 +8,8 @@ export function useSummary() {
   return useQuery({
     queryKey: queryKeys.summary(asOf),
     queryFn: () => summaryApi.get(asOf).then((r) => r.data),
-    // The summary is cheap to recompute and changes whenever any loan does —
-    // a short staleTime still lets switching screens avoid a redundant refetch.
+    // cheap to recompute and changes whenever any loan does — a short
+    // staleTime just avoids a redundant refetch when switching screens
     staleTime: 10_000,
   });
 }

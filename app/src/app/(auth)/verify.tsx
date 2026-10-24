@@ -26,8 +26,8 @@ export default function VerifyScreen() {
   const [secondsLeft, setSecondsLeft] = useState(Number(params.expiresInSeconds) || 30);
   const submittedRef = useRef(false);
 
-  // Runs once; the functional setState form always reads the latest value,
-  // so resending (which resets secondsLeft) doesn't need a new interval.
+  // runs once — the functional setState form always reads the latest
+  // value, so resending (which resets secondsLeft) doesn't need a new interval
   useEffect(() => {
     const timer = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(timer);
@@ -40,8 +40,8 @@ export default function VerifyScreen() {
     setSubmitting(true);
     try {
       await verifyOtp(params.phone, candidate);
-      // No navigation call needed: the root Stack.Protected guard flips to
-      // the signed-in group the instant useAuth's session state updates.
+      // no navigation call needed here — the root Stack.Protected guard
+      // flips to the signed-in group the moment useAuth's session state updates
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong.');
       setCode('');

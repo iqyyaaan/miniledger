@@ -1,12 +1,9 @@
-/**
- * Detect an image type from its first bytes rather than trusting what the
- * client said.
- *
- * `Content-Type` on a multipart part and the file extension are both just
- * strings the uploader chose. Sniffing the magic number is what actually stops
- * someone storing an HTML or SVG file that we then serve back from our own
- * origin — the classic stored-XSS-via-upload route.
- */
+// figures out the image type from the actual bytes instead of trusting
+// whatever the client said. the multipart Content-Type and the file
+// extension are both just strings the uploader picked — sniffing the magic
+// number is what actually stops someone uploading an HTML/SVG file that
+// later gets served back from our own origin (stored XSS via file upload,
+// basically)
 
 export type SupportedImageMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic';
 
@@ -41,13 +38,13 @@ export function detectImageMime(buffer: Buffer): SupportedImageMime | null {
     return 'image/png';
   }
 
-  // RIFF container: "RIFF" .... "WEBP"
+  // RIFF container — "RIFF" ... "WEBP"
   if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
     return 'image/webp';
   }
 
-  // ISO base media (HEIC/HEIF, what an iPhone camera produces by default):
-  // bytes 4..8 are "ftyp", then a brand such as heic/heix/mif1.
+  // HEIC/HEIF — what an iPhone camera actually produces by default. ISO
+  // base media format: bytes 4-8 are "ftyp" then a brand code like heic/mif1
   if (buffer.toString('ascii', 4, 8) === 'ftyp') {
     const brand = buffer.toString('ascii', 8, 12);
     if (['heic', 'heix', 'hevc', 'heim', 'heis', 'mif1', 'msf1'].includes(brand)) {

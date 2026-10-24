@@ -3,8 +3,8 @@ import { env, isProduction, isTest } from '../config/env.js';
 
 export const logger = pino({
   level: isTest ? 'silent' : env.LOG_LEVEL,
-  // Pretty, colourised logs locally; newline-delimited JSON in production so a
-  // log aggregator can parse them.
+  // pretty + colorized locally, plain NDJSON in prod so a log aggregator
+  // can actually parse it
   transport: isProduction
     ? undefined
     : {
@@ -23,11 +23,9 @@ export const logger = pino({
   },
 });
 
-/**
- * The mock OTP delivery channel. A real build swaps this for Twilio/MSG91;
- * the call site does not change, which is the point of keeping it behind a
- * function.
- */
+// this is the "SMS provider" for now — swap it for Twilio/MSG91 later and
+// nothing at the call site has to change, that's the whole point of hiding
+// it behind a function instead of inlining a console.log somewhere
 export function deliverOtp(phone: string, code: string, ttlSeconds: number): void {
   const banner = '─'.repeat(46);
   logger.info(

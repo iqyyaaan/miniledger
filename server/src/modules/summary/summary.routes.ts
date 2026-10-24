@@ -15,8 +15,8 @@ summaryRouter.get(
     const { asOf } = validatedQuery<typeof AsOfQuerySchema>(req);
     const summary = await getSummary(currentUser(req).id, asOf ?? null);
 
-    // The summary is cheap to recompute and must never be stale after a
-    // repayment, so it is explicitly uncacheable.
+    // cheap to recompute and must never go stale right after a repayment,
+    // so just mark it uncacheable rather than dealing with invalidation
     res.setHeader('Cache-Control', 'no-store');
     res.status(200).json({ data: summary });
   }),

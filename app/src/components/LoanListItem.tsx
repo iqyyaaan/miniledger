@@ -13,9 +13,9 @@ export function LoanListItem({ loan }: { loan: Loan }) {
   const router = useRouter();
   const markRepaid = useMarkRepaid();
 
-  // No local "just marked" flag needed: the optimistic cache update in
-  // useMarkRepaid flips `loan.status` to 'repaid' immediately, which
-  // re-renders this row with the button already hidden below.
+  // no local "just marked" flag needed — the optimistic update in
+  // useMarkRepaid flips loan.status to 'repaid' right away, which
+  // re-renders this row with the button already gone
   const handleMarkRepaid = () => {
     markRepaid.mutate(loan.id, {
       onSuccess: () => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),

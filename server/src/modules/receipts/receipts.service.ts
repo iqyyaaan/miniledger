@@ -19,22 +19,17 @@ export interface ReceiptRow {
   created_at: Date;
 }
 
-/**
- * Receipts are written to the local filesystem and their metadata to Postgres.
- *
- * For a deployed app this would be S3 (or any object store) with a presigned
- * URL — but only `storageKey`, `writeObject` and `readObject` would change.
- * The database never stores the bytes: a 5 MB photo in a column bloats every
- * backup and every sequential scan of the table.
- */
+// receipt bytes go to the local filesystem, metadata to Postgres. for an
+// actual deployment this would just be S3 + a presigned URL instead — only
+// storageKey/writeObject/readObject would need to change. keeping bytes out
+// of the DB on purpose: a 5MB photo sitting in a column bloats every backup
+// and every seq scan of the table.
 const UPLOAD_ROOT = resolve(process.cwd(), env.UPLOAD_DIR);
 
-/**
- * Keys are generated, never derived from the uploaded filename. A name like
- * `../../etc/passwd` or `../index.js` would otherwise escape the upload
- * directory. Sharding by the first two characters keeps any one directory
- * from accumulating tens of thousands of entries.
- */
+// keys are generated, never taken from the uploaded filename — something
+// like "../../etc/passwd" would otherwise walk right out of the upload
+// directory. sharding on the first two chars of the uuid keeps any single
+// folder from ending up with tens of thousands of files in it.
 function storageKeyFor(mime: SupportedImageMime): string {
   const id = randomUUID();
   return join(id.slice(0, 2), `${id}.${extensionFor(mime)}`);
@@ -42,8 +37,8 @@ function storageKeyFor(mime: SupportedImageMime): string {
 
 function absolutePathFor(storageKey: string): string {
   const path = resolve(UPLOAD_ROOT, storageKey);
-  // Belt and braces: even though keys are generated, never serve a path that
-  // resolved outside the upload root.
+  // belt and braces — keys are generated so this shouldn't ever trip, but
+  // never serve a path that resolved outside the upload root
   if (!path.startsWith(UPLOAD_ROOT)) throw badRequest('Invalid receipt path.');
   return path;
 }
@@ -68,12 +63,12 @@ export async function attachReceipt(
   const absolutePath = absolutePathFor(storageKey);
 
   await mkdir(dirname(absolutePath), { recursive: true });
-  await writeFile(absolutePath, file.buffer, { flag: 'wx' }); // 'wx' => never clobber.
+  await writeFile(absolutePath, file.buffer, { flag: 'wx' }); // wx = refuse to overwrite an existing file
 
   try {
     return await withTransaction(async (client) => {
-      // One receipt per loan. Re-uploading replaces the row and we clean up
-      // the file the old row pointed at.
+      // one receipt per loan — re-uploading replaces the row, and we clean
+      // up whatever file the old row was pointing at
       const previous = await client.query<{ storage_key: string }>(
         'SELECT storage_key FROM receipts WHERE loan_id = $1::uuid',
         [loanId],
@@ -102,7 +97,8 @@ export async function attachReceipt(
 
       const old = previous.rows[0]?.storage_key;
       if (old && old !== storageKey) {
-        // Best effort: an orphaned file is untidy, a failed request is worse.
+        // best effort cleanup — an orphaned file on disk is untidy, failing
+        // the whole request over it would be worse
         void unlink(absolutePathFor(old)).catch((error) =>
           logger.warn({ err: error, storageKey: old }, 'Could not remove replaced receipt'),
         );
@@ -119,7 +115,7 @@ export async function attachReceipt(
       };
     });
   } catch (error) {
-    // The row never landed, so don't leave the bytes behind either.
+    // DB write failed, so don't leave the file sitting there either
     await unlink(absolutePath).catch(() => undefined);
     throw error;
   }
@@ -127,8 +123,8 @@ export async function attachReceipt(
 
 export async function openReceipt(userId: string, loanId: string) {
   const { rows } = await query<ReceiptRow>(
-    // The `user_id` predicate is the authorisation check: there is no code
-    // path that reads a receipt without scoping to the caller.
+    // the user_id check IS the authorization here — nothing reads a receipt
+    // without scoping to the caller first
     'SELECT * FROM receipts WHERE loan_id = $1::uuid AND user_id = $2',
     [loanId, userId],
   );
@@ -149,8 +145,7 @@ export async function openReceipt(userId: string, loanId: string) {
     stream: createReadStream(absolutePath),
     mimeType: receipt.mime_type,
     sizeBytes: receipt.size_bytes,
-    /** Content hash would be better; the id is stable and good enough here. */
-    etag: `"${receipt.id}"`,
+    etag: `"${receipt.id}"`, // a real content hash would be more correct, but the id's stable and good enough
   };
 }
 

@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { env } from '../../config/env.js';
 import { MoneyParseError, parseAmountToMinor } from '../../lib/money.js';
 
-/** Rejects `2026-02-30`: `Date` would roll it forward to March 2 silently. */
+// catches stuff like "2026-02-30" — plain `new Date(...)` would just roll
+// that forward to March 2nd without complaining
 const isRealCalendarDate = (value: string): boolean => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return false;
@@ -22,11 +23,9 @@ export const IsoDateSchema = z
 
 export const UuidSchema = z.string().uuid('Not a valid id.');
 
-/**
- * Accepts `1500`, `"1500"`, `"1,500.50"` and turns all of them into integer
- * minor units before the value reaches any business logic. Parsing at the
- * edge means the service layer only ever deals in integers.
- */
+// takes 1500, "1500", "1,500.50", whatever — turns it into integer minor
+// units right here at the edge, so nothing past this point ever has to
+// think about decimals again
 export const AmountSchema = z
   .union([z.number(), z.string()])
   .transform((value, ctx) => {
@@ -64,10 +63,8 @@ export const CreateLoanSchema = z
   })
   .strict();
 
-/**
- * At least one field must be present — an empty PATCH almost always means the
- * client built the request wrong, and silently 200-ing hides that.
- */
+// needs at least one field — an empty PATCH almost always means the client
+// built the request wrong somewhere, and a silent 200 would just hide that
 export const UpdateLoanSchema = z
   .object({
     friendName: FriendNameSchema.optional(),
@@ -88,11 +85,9 @@ export const ListLoansQuerySchema = z
     order: z.enum(['asc', 'desc']).default('asc'),
     limit: z.coerce.number().int().min(1).max(100).default(25),
     cursor: z.string().max(200).optional(),
-    /**
-     * The client's own "today". The app sends its local date so a user in a
-     * different timezone to the server still sees the right rows highlighted.
-     * Falls back to APP_TIMEZONE when absent.
-     */
+    // the client's own idea of "today" — app sends its local date so
+    // someone in a different timezone than the server still sees the right
+    // rows highlighted as overdue. falls back to APP_TIMEZONE if omitted.
     asOf: IsoDateSchema.optional(),
   })
   .strict();

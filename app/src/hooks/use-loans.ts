@@ -51,16 +51,14 @@ function invalidateAfterMutation(queryClient: QueryClient) {
   void queryClient.invalidateQueries({ queryKey: ['summary'] });
 }
 
-/**
- * Every cached loans list, with the filter it represents recovered from its
- * own query key (`['loans', 'list', status, search, asOf]`).
- *
- * This loops and calls `setQueryData` per query rather than the single-pass
- * `setQueriesData`, because `setQueriesData`'s updater only ever receives the
- * *data* — not the key — so there is no way to ask "which status filter is
- * this page?" from inside it. Each cached list needs that answer to decide
- * whether an updated loan still belongs on it.
- */
+// walks every cached loans list, recovering the filter it represents from
+// its own query key (['loans', 'list', status, search, asOf]).
+//
+// this loops and calls setQueryData per query instead of using the
+// single-pass setQueriesData, because setQueriesData's updater only ever
+// gets handed the DATA, not the key — so there's no way to ask "which
+// status filter is this page?" from inside it. every cached list needs
+// that answer to know whether an updated loan still belongs on it.
 type ListSnapshot = [readonly unknown[], ListCache | undefined][];
 
 function forEachLoansListQuery(
@@ -119,12 +117,10 @@ export function useDeleteLoan() {
   });
 }
 
-/**
- * Mark repaid / undo share one implementation: both are "replace this loan
- * everywhere it's cached with a server-shaped guess, then reconcile." The
- * guess is optimistic — applied instantly, before the request resolves — and
- * rolled back onError using the snapshot taken in onMutate.
- */
+// mark-repaid and undo share one implementation — both really are "replace
+// this loan everywhere it's cached with a guess, then reconcile." the
+// guess is optimistic, applied instantly before the request even resolves,
+// and gets rolled back onError using the snapshot taken in onMutate.
 function useSetRepaidState(markRepaid: boolean) {
   const queryClient = useQueryClient();
 
@@ -160,7 +156,7 @@ function useSetRepaidState(markRepaid: boolean) {
       if (context.previousDetail) queryClient.setQueryData(queryKeys.loan(id, context.asOf), context.previousDetail);
     },
     onSuccess: (loan, id, context) => {
-      // Replace the optimistic guess with the server's authoritative row.
+      // swap the optimistic guess for the server's actual row
       forEachLoansListQuery(queryClient, (status, data) => updateLoanInPages(data, id, () => loan, status));
       if (context) queryClient.setQueryData(queryKeys.loan(id, context.asOf), loan);
     },
@@ -192,7 +188,7 @@ export function useDeleteReceipt(loanId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Pure cache-editing helpers (operate on one already-resolved ListCache)
+// pure cache-editing helpers, operate on one already-resolved ListCache
 // ---------------------------------------------------------------------------
 
 function updateLoanInPages(
@@ -208,8 +204,8 @@ function updateLoanInPages(
 
       const nextLoans = page.data
         .map((loan) => (loan.id === loanId ? update(loan) : loan))
-        // If the update means the loan no longer matches this list's filter
-        // — e.g. marking something repaid removes it from "overdue" — drop it.
+        // if the update means it no longer matches this list's filter —
+        // e.g. marking something repaid drops it from "overdue" — cut it
         .filter((loan) => (loan.id === loanId ? loanMatchesStatus(loan, status) : true));
 
       return { ...page, data: nextLoans, meta: { ...page.meta, count: nextLoans.length } };

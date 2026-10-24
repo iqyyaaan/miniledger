@@ -3,7 +3,7 @@ import { useFriends } from '@/hooks/use-loans';
 import { formatMinorAsCurrency } from '@/lib/money';
 import { useTheme } from '@/theme/colors';
 
-/** Suggests friends the user has already lent to, so repeat entries take one tap. */
+// suggests friends already lent to before, so a repeat entry is one tap
 export function FriendSuggestions({ query, onPick }: { query: string; onPick: (name: string) => void }) {
   const { colors } = useTheme();
   const { data: friends } = useFriends();
@@ -13,7 +13,7 @@ export function FriendSuggestions({ query, onPick }: { query: string; onPick: (n
   const needle = query.trim().toLowerCase();
   const matches = (needle ? friends.filter((f) => f.name.toLowerCase().includes(needle)) : friends).slice(0, 6);
 
-  // Don't suggest the name the user already typed exactly.
+  // no point suggesting the exact name someone already typed
   if (matches.length === 0 || (matches.length === 1 && matches[0]!.name.toLowerCase() === needle)) return null;
 
   return (

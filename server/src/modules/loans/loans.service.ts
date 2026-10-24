@@ -52,8 +52,8 @@ export async function listLoans(
 
 export async function getLoan(userId: string, loanId: string, asOf: string | null): Promise<LoanDto> {
   const row = await repo.findLoanById(userId, loanId, asOf, env.APP_TIMEZONE);
-  // A loan belonging to someone else is reported as "not found", not
-  // "forbidden" — otherwise the 403 confirms that the id exists.
+  // a loan belonging to someone else comes back as "not found", not
+  // "forbidden" — a 403 would confirm the id exists, just not to you
   if (!row) throw notFound('Loan');
   return toLoanDto(row);
 }
@@ -99,14 +99,11 @@ export async function updateLoan(
   return toLoanDto(row);
 }
 
-/**
- * Mark a loan repaid.
- *
- * Idempotency matters here more than anywhere else in the app: a flaky
- * connection means the app may well send this twice. The conditional UPDATE
- * guarantees only the first one takes effect; the second gets a 409 that the
- * app can treat as "already done" rather than a hard failure.
- */
+// marking something repaid is where idempotency matters most in this app —
+// a flaky connection on mobile means the client might genuinely send this
+// twice. the conditional UPDATE in the repo guarantees only the first one
+// actually takes effect; the second gets a 409 the app can read as "already
+// done" instead of a hard failure.
 export async function markRepaid(
   userId: string,
   loanId: string,
@@ -116,14 +113,15 @@ export async function markRepaid(
     const { updated } = await repo.markRepaid(client, userId, loanId, new Date());
 
     if (!updated) {
-      // Distinguish "does not exist" from "already repaid" — different fixes.
+      // "doesn't exist" and "already repaid" need different responses, so
+      // figure out which one actually happened
       const exists = await repo.loanExists(userId, loanId);
       if (!exists) throw notFound('Loan');
       throw conflict('This entry is already marked as repaid.', { code: 'already_repaid' });
     }
 
-    // Read via the same client: the UPDATE above has not committed yet, so a
-    // fresh pool connection would not see it (see findLoanById's docstring).
+    // has to go through `client`, not a fresh connection — the UPDATE above
+    // hasn't committed yet (see the comment on findLoanById for why)
     const row = await repo.findLoanById(userId, loanId, asOf, env.APP_TIMEZONE, client);
     if (!row) throw notFound('Loan');
 
@@ -162,9 +160,9 @@ export async function listFriends(userId: string, limit = 50) {
   return repo.listFriendNames(userId, limit);
 }
 
-/** Today, in the app's configured timezone, as `YYYY-MM-DD`. */
+// "today" in the app's configured timezone, as YYYY-MM-DD
 export function resolveToday(timezone = env.APP_TIMEZONE): string {
-  // `en-CA` formats as YYYY-MM-DD, which saves hand-assembling the parts.
+  // en-CA happens to format dates as YYYY-MM-DD, saves hand-assembling it
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone,
     year: 'numeric',

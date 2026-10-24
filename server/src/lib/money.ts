@@ -1,14 +1,10 @@
-/**
- * Money is never stored or transported as a float.
- *
- * `0.1 + 0.2 !== 0.3` in IEEE-754, and a ledger that drifts by a paisa per
- * operation is worse than useless. Internally every amount is an integer
- * number of *minor units* (paise for INR, cents for USD) held in a Postgres
- * `BIGINT`. The only place a decimal exists is at the API boundary, and the
- * conversion both ways lives here so it is tested in one place.
- */
+// Everything here works in integer minor units (paise for INR), never floats.
+// 0.1 + 0.2 !== 0.3 in JS, and a ledger that's off by a paisa after enough
+// operations is a real bug, not a rounding footnote. Amounts live as BIGINT
+// in Postgres; the only spot a decimal exists is at the API boundary, which
+// is why the conversion is centralized here instead of scattered around.
 
-/** Largest amount we accept: 1 trillion major units, well inside Number.MAX_SAFE_INTEGER. */
+/** 1 trillion major units — comfortably under Number.MAX_SAFE_INTEGER. */
 export const MAX_AMOUNT_MINOR = 100_000_000_000_000;
 
 const MINOR_UNIT_EXPONENT: Record<string, number> = {
@@ -16,7 +12,7 @@ const MINOR_UNIT_EXPONENT: Record<string, number> = {
   USD: 2,
   EUR: 2,
   GBP: 2,
-  JPY: 0, // No subunit in circulation.
+  JPY: 0, // yen has no subunit
   KWD: 3,
 };
 
@@ -32,24 +28,21 @@ export class MoneyParseError extends Error {
 }
 
 /**
- * Parse a user-supplied amount into minor units.
+ * Turns whatever a user typed — "1250", "1,250.50", "₹1,250.50" — into
+ * integer minor units. Rejects negatives, zero, and too many decimal places.
  *
- * Accepts `1250`, `"1250"`, `"1,250.50"`, `"₹1,250.50"`, `" 1250.5 "`.
- * Rejects negatives, zero, more decimal places than the currency has, and
- * anything non-numeric.
- *
- * The string path does the arithmetic on digits rather than multiplying a
- * float by 100 — `Math.round(19.99 * 100)` happens to be right, but
- * `Math.round(1.005 * 100)` is 100, not 101.
+ * Does the math on the digit string instead of `Math.round(x * 100)`.
+ * That trick looks fine until you hit something like 1.005, where
+ * `1.005 * 100` is actually 100.49999999999999 under the hood and rounds
+ * down to 100 instead of 101. Not worth the risk on a ledger.
  */
 export function parseAmountToMinor(input: unknown, currency = 'INR'): number {
   const exponent = minorUnitExponent(currency);
 
   if (typeof input === 'number') {
     if (!Number.isFinite(input)) throw new MoneyParseError('Amount must be a finite number.');
-    // Re-enter through the string path so there is exactly one implementation
-    // of the decimal arithmetic. `toFixed` is safe here because we immediately
-    // check the round-trip below.
+    // toFixed then re-parse as a string so there's one code path for the
+    // actual decimal handling, not two slightly-different ones.
     return parseAmountToMinor(input.toFixed(exponent), currency);
   }
 
@@ -57,7 +50,7 @@ export function parseAmountToMinor(input: unknown, currency = 'INR'): number {
     throw new MoneyParseError('Amount must be a number or a numeric string.');
   }
 
-  // Strip grouping separators, whitespace and a leading currency symbol.
+  // strip thousands separators, whitespace, currency symbol prefix
   const cleaned = input.trim().replace(/[\s,]/g, '').replace(/^[^\d.-]+/, '');
 
   if (cleaned === '') throw new MoneyParseError('Amount is required.');
@@ -81,8 +74,8 @@ export function parseAmountToMinor(input: unknown, currency = 'INR'): number {
   const paddedFraction = fraction.padEnd(exponent, '0');
   const digits = `${whole || '0'}${paddedFraction}`;
 
-  // Guard before Number() so an absurdly long input can't silently lose
-  // precision by exceeding Number.MAX_SAFE_INTEGER.
+  // someone could type 50 zeroes and overflow Number() silently, so bail
+  // before that rather than trust isSafeInteger to catch everything
   if (digits.replace(/^0+/, '').length > 15) {
     throw new MoneyParseError('Amount is too large.');
   }
@@ -95,7 +88,7 @@ export function parseAmountToMinor(input: unknown, currency = 'INR'): number {
   return minor;
 }
 
-/** Minor units back to a plain decimal string, e.g. 125050 -> "1250.50". */
+// 125050 -> "1250.50"
 export function formatMinorAsDecimal(minor: number, currency = 'INR'): string {
   const exponent = minorUnitExponent(currency);
   if (exponent === 0) return String(minor);
@@ -107,7 +100,8 @@ export function formatMinorAsDecimal(minor: number, currency = 'INR'): string {
   return `${negative ? '-' : ''}${whole}.${fraction}`;
 }
 
-/** Locale-aware display string, e.g. 125050 -> "₹1,250.50". Used for logs/tests. */
+// 125050 -> "₹1,250.50" — mainly for logs and test assertions, the app does
+// its own formatting client-side.
 export function formatMinorAsCurrency(minor: number, currency = 'INR', locale = 'en-IN'): string {
   const exponent = minorUnitExponent(currency);
   return new Intl.NumberFormat(locale, {

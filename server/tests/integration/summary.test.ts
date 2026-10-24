@@ -37,13 +37,13 @@ describe('summary', () => {
   });
 
   it('computes total lent, repaid, outstanding and overdue correctly', async () => {
-    // Overdue and outstanding.
+    // overdue and still outstanding
     await create({ friendName: 'Ravi', amount: '1000', dueDate: daysFromToday(-5) }).expect(201);
-    // Due soon and outstanding.
+    // due soon, still outstanding
     await create({ friendName: 'Dev', amount: '500', dueDate: daysFromToday(3) }).expect(201);
-    // Outstanding, far out — not due-soon, not overdue.
+    // outstanding but way out — not due-soon, not overdue either
     await create({ friendName: 'Nisha', amount: '2000', dueDate: daysFromToday(60) }).expect(201);
-    // Repaid — even though its due date is in the past, it must not count as overdue.
+    // repaid — due date's in the past but this should NOT count as overdue
     const repaid = await create({ friendName: 'Karthik', amount: '300', dueDate: daysFromToday(-30) }).expect(
       201,
     );
@@ -55,8 +55,8 @@ describe('summary', () => {
     expect(totals.lentMinor).toBe(100_000 + 50_000 + 200_000 + 30_000);
     expect(totals.repaidMinor).toBe(30_000);
     expect(totals.outstandingMinor).toBe(100_000 + 50_000 + 200_000);
-    expect(totals.overdueMinor).toBe(100_000); // Only Ravi's — Karthik's is repaid.
-    expect(totals.dueSoonMinor).toBe(50_000); // Only Dev's, within the 7-day window.
+    expect(totals.overdueMinor).toBe(100_000); // only Ravi's — Karthik's is repaid, doesn't count
+    expect(totals.dueSoonMinor).toBe(50_000); // only Dev's falls inside the 7-day window
 
     expect(counts.total).toBe(4);
     expect(counts.repaid).toBe(1);
@@ -65,18 +65,18 @@ describe('summary', () => {
     expect(counts.dueSoon).toBe(1);
     expect(counts.friends).toBe(4);
 
-    // Lent total = 1000 + 500 + 2000 + 300 = 3800 major units = 380,000 minor.
+    // lent total: 1000 + 500 + 2000 + 300 = 3800 major units = 380,000 minor
     expect(res.body.data.repaidPercent).toBeCloseTo((30_000 / 380_000) * 100, 1);
   });
 
   it('is unaffected by floating point when many small amounts are summed', async () => {
-    // 30 entries of ₹0.10 — a classic float-drift trap. The total must be
-    // exact because everything is integer paise end to end.
+    // 30 entries of ₹0.10 — classic float-drift trap. should come out exact
+    // since this is integer paise the whole way through.
     for (let i = 0; i < 30; i += 1) {
       await create({ friendName: 'Ravi', amount: '0.10', dueDate: daysFromToday(10) }).expect(201);
     }
     const res = await session.auth(request(app).get('/api/summary')).expect(200);
-    expect(res.body.data.totals.outstandingMinor).toBe(300); // Exactly ₹3.00, not ₹2.9999999999999996.
+    expect(res.body.data.totals.outstandingMinor).toBe(300); // exactly ₹3.00, not ₹2.9999999999999996
   });
 
   it('ranks top debtors by outstanding amount, grouping by friend regardless of case', async () => {

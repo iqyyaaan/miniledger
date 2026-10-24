@@ -4,30 +4,23 @@ import type { LoanRow } from './loans.repository.js';
 export interface LoanDto {
   id: string;
   friendName: string;
-  /** Authoritative integer value. Clients should do arithmetic on this. */
-  amountMinor: number;
-  /** Convenience decimal string, e.g. "1250.50". Never a float. */
-  amount: string;
+  amountMinor: number; // the real value — clients should do math on this one
+  amount: string; // display convenience, e.g. "1250.50" — never a float under the hood
   currency: string;
   dueDate: string;
   note: string | null;
   status: 'outstanding' | 'repaid';
-  /** Derived server-side so every client agrees on what "overdue" means. */
-  isOverdue: boolean;
-  /** Negative when the due date has passed. */
-  daysUntilDue: number;
+  isOverdue: boolean; // computed server-side so every client agrees on what "overdue" means
+  daysUntilDue: number; // negative once the due date's passed
   repaidAt: string | null;
   createdAt: string;
   updatedAt: string;
   receipt: { id: string; url: string; mimeType: string; sizeBytes: number } | null;
 }
 
-/**
- * The single place a database row becomes an API object.
- *
- * Centralising it means a column added to `loans` is not accidentally exposed,
- * and the snake_case/camelCase boundary is crossed exactly once.
- */
+// the one place a DB row turns into an API response object. keeping it
+// centralized means a new column added to `loans` doesn't leak out by
+// accident, and the snake_case/camelCase crossing only happens once
 export function toLoanDto(row: LoanRow): LoanDto {
   return {
     id: row.id,
@@ -46,8 +39,9 @@ export function toLoanDto(row: LoanRow): LoanDto {
     receipt: row.receipt_id
       ? {
           id: row.receipt_id,
-          // Relative path: the app prefixes its own API base URL, so the same
-          // response works from a simulator, a device on the LAN, or a deploy.
+          // relative path on purpose — the app prefixes its own API base
+          // url, so this same response works whether it's hitting a
+          // simulator, a phone on the LAN, or a real deployment
           url: `/api/loans/${row.id}/receipt`,
           mimeType: row.receipt_mime_type!,
           sizeBytes: row.receipt_size_bytes!,

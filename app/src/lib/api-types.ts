@@ -1,4 +1,4 @@
-/** Mirrors server/src/modules/loans/loans.serializer.ts#LoanDto. */
+// mirrors server/src/modules/loans/loans.serializer.ts#LoanDto
 export interface Loan {
   id: string;
   friendName: string;
@@ -23,7 +23,7 @@ export interface LoanListResponse {
   meta: { nextCursor: string | null; asOf: string; count: number };
 }
 
-/** Mirrors server/src/modules/summary/summary.service.ts#Summary. */
+// mirrors server/src/modules/summary/summary.service.ts#Summary
 export interface Summary {
   asOf: string;
   currency: string;
@@ -96,7 +96,7 @@ export interface ApiErrorBody {
   };
 }
 
-/** Thrown by `apiFetch` for any non-2xx response. */
+// thrown by the fetch client for any non-2xx response
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -114,7 +114,7 @@ export class ApiError extends Error {
       : [];
   }
 
-  /** The 409 case where "mark repaid" (or similar) was already applied. */
+  // the 409 case where "mark repaid" (or similar) already happened
   get isAlreadyDone(): boolean {
     const details = this.details as { code?: string } | undefined;
     return this.status === 409 && (details?.code === 'already_repaid' || details?.code === 'already_outstanding');

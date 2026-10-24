@@ -1,10 +1,9 @@
-/**
- * The app sends its own notion of "today" as `asOf` on every request where it
- * matters (listing, fetching a loan, the summary). That is what lets
- * `isOverdue` agree with what the user is actually looking at on their own
- * device's calendar, rather than the server process's timezone — see the
- * `asOf` parameter on the API (loans.schemas.ts / summary.service.ts).
- */
+// the app sends its own idea of "today" as `asOf` on every request where it
+// matters (listing, fetching a loan, the summary). that's what keeps
+// isOverdue matching what the user is actually looking at on their own
+// device's calendar, instead of whatever timezone the server process
+// happens to be running in — see the asOf param on the API side
+// (loans.schemas.ts / summary.service.ts).
 export function todayIso(): string {
   const now = new Date();
   const year = now.getFullYear();
@@ -13,7 +12,7 @@ export function todayIso(): string {
   return `${year}-${month}-${day}`;
 }
 
-/** `"2026-11-15"` -> `"15 Nov 2026"`. Parsed as a calendar date, not a UTC instant. */
+// "2026-11-15" -> "15 Nov 2026". parsed as a calendar date, not a UTC instant.
 export function formatIsoDate(iso: string): string {
   const [year, month, day] = iso.split('-').map(Number);
   if (!year || !month || !day) return iso;
@@ -21,7 +20,7 @@ export function formatIsoDate(iso: string): string {
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** `-3 -> "3 days overdue"`, `0 -> "Due today"`, `5 -> "Due in 5 days"`. */
+// -3 -> "3 days overdue", 0 -> "Due today", 5 -> "Due in 5 days"
 export function formatDaysUntilDue(daysUntilDue: number): string {
   if (daysUntilDue === 0) return 'Due today';
   if (daysUntilDue === 1) return 'Due tomorrow';
@@ -30,7 +29,7 @@ export function formatDaysUntilDue(daysUntilDue: number): string {
   return `Due in ${daysUntilDue} days`;
 }
 
-/** `YYYY-MM-DD` for a `Date`, in local time — used to seed a date picker. */
+// YYYY-MM-DD for a Date, in local time — used to seed the date picker
 export function toIsoDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
